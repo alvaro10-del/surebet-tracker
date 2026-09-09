@@ -1,3 +1,7 @@
 # Backups exportados desde la app (contienen tu historial de apuestas — no subir al repo público)
 surebet-tracker-backup-*.json
 surebet-tracker-historial-*.csv
+
+# Cloudflare Worker local tooling cache (nunca contiene los secretos, esos viven solo en Cloudflare)
+worker/.wrangler/
+worker/node_modules/

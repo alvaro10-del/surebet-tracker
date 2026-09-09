@@ -646,8 +646,20 @@
 
   document.getElementById("totalStake").addEventListener("input", compute);
 
-  // ---------- Photo-to-surebet (sample capability) ----------
+  // ---------- Photo-to-surebet (Claude "sample" capability in the artifact viewer, ----------
+  // ---------- or a Cloudflare Worker proxy as a fallback for the public/static page) ----------
+
+  // Filled in for the static/public deployment (GitHub Pages) so the photo feature works
+  // there too. appSecret is NOT a real secret — it ships readable in this file, it only
+  // filters out blind/automated hits on the endpoint. Real protection is server-side
+  // (daily request cap) — see worker/src/index.js.
+  var EXTERNAL_AI_CONFIG = {
+    workerUrl: "https://surebet-tracker-proxy.arbitrajetraker.workers.dev",
+    appSecret: "FWtRb-bxK-Ww2uODQ3jxFabLCHRBR6r8"
+  };
+
   var sampleFn = null;
+  var activeProvider = null; // "claude" | "worker" | null
   var sampleImageCaps = null;
   var selectedPhotoFiles = [];
   var lastOpportunities = [];
@@ -668,9 +680,18 @@
     renderPhotoThumbs();
   }
 
+  function tryWorkerFallback(reasonPrefix){
+    if(!EXTERNAL_AI_CONFIG.workerUrl){
+      setPhotoAvail(reasonPrefix + " Podés seguir usando la calculadora a mano.", true);
+      return;
+    }
+    activeProvider = "worker";
+    showPhotoUpload({maxCount: 6, mediaTypes: ["image/png","image/jpeg","image/webp","image/gif"]});
+  }
+
   function initSample(){
     if(typeof claude === "undefined" || !claude || typeof claude.use !== "function"){
-      setPhotoAvail("No disponible: esta página no se está ejecutando dentro de un visor de Claude que admita esta función.", true);
+      tryWorkerFallback("Esta página no se está ejecutando dentro de un visor de Claude.");
       return;
     }
     var settled = false;
@@ -682,22 +703,75 @@
     claude.use("sample").then(function(ns){
       settled = true;
       if(!ns){
-        setPhotoAvail("No disponible en esta vista: el artifact no pudo obtener permiso para pedirle ayuda a Claude aquí (puede depender de la app o de la configuración de la cuenta/organización). Podés seguir usando la calculadora a mano.", true);
+        tryWorkerFallback("El artifact no pudo obtener permiso para pedirle ayuda a Claude en esta vista.");
         return;
       }
       sampleFn = ns;
       sampleFn.limits().then(function(caps){
         if(caps && caps.images){
+          activeProvider = "claude";
           showPhotoUpload(caps.images);
         } else {
-          setPhotoAvail("Podés pedirle ayuda a Claude en este artifact, pero esta vista todavía no admite adjuntar imágenes.", true);
+          tryWorkerFallback("Podés pedirle ayuda a Claude en este artifact, pero esta vista todavía no admite adjuntar imágenes.");
         }
       }).catch(function(){
-        setPhotoAvail("No se pudo confirmar si esta vista admite imágenes. Probá recargar la página.", true);
+        tryWorkerFallback("No se pudo confirmar si esta vista admite imágenes.");
       });
     }).catch(function(){
       settled = true;
-      setPhotoAvail("No se pudo verificar la disponibilidad de Claude en esta vista. Probá recargar la página.", true);
+      tryWorkerFallback("No se pudo verificar la disponibilidad de Claude en esta vista.");
+    });
+  }
+
+  function fileToBase64(file){
+    return file.arrayBuffer().then(function(buf){
+      var bytes = new Uint8Array(buf);
+      var binary = "";
+      var chunk = 0x8000;
+      for(var i = 0; i < bytes.length; i += chunk){
+        binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk));
+      }
+      return btoa(binary);
+    });
+  }
+
+  function tolerantJsonParse(text){
+    try{ return JSON.parse(text); }catch(e){}
+    var fence = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
+    if(fence){
+      try{ return JSON.parse(fence[1]); }catch(e){}
+    }
+    var start = -1, end = -1;
+    for(var i = 0; i < text.length; i++){ if(text[i] === "{" || text[i] === "["){ start = i; break; } }
+    for(var j = text.length - 1; j >= 0; j--){ if(text[j] === "}" || text[j] === "]"){ end = j; break; } }
+    if(start >= 0 && end > start){
+      try{ return JSON.parse(text.slice(start, end + 1)); }catch(e){}
+    }
+    var err = new Error("La respuesta no traía JSON válido");
+    err.code = "invalid_json";
+    throw err;
+  }
+
+  function analyzeViaWorker(prompt, files){
+    return Promise.all(files.map(function(f){
+      return fileToBase64(f).then(function(base64){
+        return {mediaType: f.type || "image/png", base64: base64};
+      });
+    })).then(function(images){
+      return fetch(EXTERNAL_AI_CONFIG.workerUrl, {
+        method: "POST",
+        headers: {"Content-Type": "application/json", "X-App-Secret": EXTERNAL_AI_CONFIG.appSecret},
+        body: JSON.stringify({prompt: prompt, images: images})
+      });
+    }).then(function(resp){
+      return resp.json().catch(function(){ return {}; }).then(function(body){
+        if(!resp.ok){
+          var err = new Error(body.error || ("HTTP " + resp.status));
+          err.code = body.error || "upstream_error";
+          throw err;
+        }
+        return tolerantJsonParse(body.text || "");
+      });
     });
   }
 
@@ -768,7 +842,13 @@
     refused: "Claude no pudo procesar esas imágenes.",
     upstream_error: "Hubo un problema temporal analizando las imágenes. Probá de nuevo en un momento.",
     sampling_disabled: "Esta cuenta no tiene disponible pedirle ayuda a Claude en artifacts.",
-    prompt_too_large: "Son demasiadas imágenes juntas para un solo análisis. Probá con menos a la vez."
+    prompt_too_large: "Son demasiadas imágenes juntas para un solo análisis. Probá con menos a la vez.",
+    unauthorized: "Configuración inválida del servicio de análisis. Avisale a quien mantiene esta página.",
+    daily_limit_reached: "Se alcanzó el límite diario de análisis de esta página. Probá de nuevo mañana, o cargá los datos a mano.",
+    too_many_images: "Son demasiadas imágenes juntas. Probá con menos a la vez (máximo 6).",
+    image_too_large: "Alguna imagen pesa demasiado. Probá con un archivo más liviano.",
+    bad_request: "Hubo un problema preparando el pedido. Probá de nuevo.",
+    method_not_allowed: "Hubo un problema de configuración del servicio de análisis."
   };
 
   function analyzeLegsStats(legsArr){
@@ -829,7 +909,7 @@
   }
 
   document.getElementById("analyzePhotoBtn").addEventListener("click", function(){
-    if(!sampleFn || selectedPhotoFiles.length === 0) return;
+    if(!activeProvider || selectedPhotoFiles.length === 0) return;
     var btn = document.getElementById("analyzePhotoBtn");
     var status = document.getElementById("photoStatus");
     btn.disabled = true;
@@ -856,7 +936,11 @@
       "Las cuotas deben ser números decimales, nunca fraccionarias ni americanas. Si no encontrás ninguna oportunidad clara, " +
       'devolvé "opportunities": [] y explicá por qué en "notes".';
 
-    sampleFn.json(prompt, {images: selectedPhotoFiles}).then(function(data){
+    var task = activeProvider === "claude"
+      ? sampleFn.json(prompt, {images: selectedPhotoFiles})
+      : analyzeViaWorker(prompt, selectedPhotoFiles);
+
+    task.then(function(data){
       btn.disabled = false;
       var opps = Array.isArray(data && data.opportunities) ? data.opportunities : [];
       opps = opps.map(function(o){

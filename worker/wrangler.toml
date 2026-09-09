@@ -1,0 +1,14 @@
+name = "surebet-tracker-proxy"
+main = "src/index.js"
+compatibility_date = "2025-01-01"
+
+[vars]
+ALLOWED_ORIGIN = "https://alvaro10-del.github.io"
+
+[[kv_namespaces]]
+binding = "RATE_LIMIT_KV"
+id = "1be4bbdfdf7f4898be46916c3a6ca3e8"
+
+# Secrets (never stored in this file — set with `wrangler secret put`):
+#   ANTHROPIC_API_KEY
+#   APP_SECRET
