@@ -103,7 +103,7 @@ export default {
         },
         body: JSON.stringify({
           model: ANTHROPIC_MODEL,
-          max_tokens: 4096,
+          max_tokens: 8000,
           messages: [{ role: "user", content }],
         }),
       });
@@ -126,9 +126,18 @@ export default {
       await env.RATE_LIMIT_KV.put(kvKey, String(current + 1), { expirationTtl: 60 * 60 * 24 * 3 });
     }
 
+    console.log(
+      "stop_reason:", data.stop_reason,
+      "text length:", text.length,
+      "usage:", JSON.stringify(data.usage),
+      "text tail:", JSON.stringify(text.slice(-300))
+    );
+
     if (!text) {
-      console.log("empty text. stop_reason:", data.stop_reason, "block types:", (data.content || []).map((b) => b.type), "usage:", JSON.stringify(data.usage));
       return json({ error: "empty_completion" }, 502, env);
+    }
+    if (data.stop_reason === "max_tokens") {
+      return json({ error: "truncated", text }, 502, env);
     }
     return json({ text }, 200, env);
   },

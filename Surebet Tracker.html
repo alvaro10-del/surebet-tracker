@@ -879,7 +879,8 @@
     too_many_images: "Son demasiadas imágenes juntas. Probá con menos a la vez (máximo 6).",
     image_too_large: "Alguna imagen pesa demasiado. Probá con un archivo más liviano.",
     bad_request: "Hubo un problema preparando el pedido. Probá de nuevo.",
-    method_not_allowed: "Hubo un problema de configuración del servicio de análisis."
+    method_not_allowed: "Hubo un problema de configuración del servicio de análisis.",
+    truncated: "Había demasiadas oportunidades en la imagen y la respuesta se cortó. Probá con una captura con menos filas visibles a la vez, o recortá la imagen antes de subirla."
   };
 
   function analyzeLegsStats(legsArr){
@@ -974,7 +975,9 @@
       "1. Identificá CADA oportunidad de arbitraje visible, una por fila si es una lista tipo BetBurger — no te quedes solo con la " +
       "primera. Cada oportunidad es UN mercado de UN evento con las cuotas de sus distintos resultados (típicamente 2: las dos " +
       "cuotas emparejadas/resaltadas de esa fila) en, idealmente, distintas casas. Si varias imágenes muestran cuotas del mismo " +
-      "evento y mercado, combinalas en una sola oportunidad.\n" +
+      "evento y mercado, combinalas en una sola oportunidad. Si hay MÁS DE 6 oportunidades visibles en total, devolvé solo las 6 " +
+      "con mejor porcentaje de ganancia mostrado y contá el resto en \"notes\" (ej: \"hay 4 oportunidades más en la imagen, no " +
+      "incluidas por espacio\") — nunca vale más devolver todas a medias que devolver pocas completas.\n" +
       "2. Para cada oportunidad devolvé el evento, el mercado (si hay notación abreviada como 1X2, TO/TU, AH1/AH2, BTTS, " +
       "escribí el nombre completo en \"market\"), la lista de casas con su cuota decimal, y si la herramienta muestra un % de " +
       "ganancia/ROI para esa fila (como \"0,99%\" a la izquierda) devolvelo en \"displayedPct\" como número (0.99), o null si no " +
