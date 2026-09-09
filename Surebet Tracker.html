@@ -240,6 +240,24 @@
   .mode-btn:disabled{ cursor:not-allowed; color:var(--text-muted); opacity:.7; }
   .mode-soon{ font-size:9.5px; text-transform:uppercase; letter-spacing:0.04em; background:var(--accent-soft); color:var(--accent-strong); padding:1px 5px; border-radius:100px; }
 
+  .cal-header{ display:flex; align-items:center; gap:10px; margin-bottom:14px; flex-wrap:wrap; }
+  .cal-title{ font-family:'Big Shoulders Display'; font-size:19px; font-weight:800; min-width:150px; text-align:center; }
+  .cal-spacer{ flex:1; }
+  .cal-summary{ font-size:12.5px; color:var(--text-secondary); display:flex; gap:16px; flex-wrap:wrap; }
+  .cal-summary strong{ color:var(--text-primary); font-family:'IBM Plex Mono'; }
+  .cal-summary strong.pos{ color:var(--success); }
+  .cal-summary strong.neg{ color:var(--danger); }
+  .cal-grid{ display:grid; grid-template-columns:repeat(7,1fr); gap:6px; }
+  .cal-dow{ font-size:10.5px; text-transform:uppercase; letter-spacing:0.04em; color:var(--text-muted); text-align:center; padding:4px 0 8px; font-weight:600; }
+  .cal-cell{ min-height:58px; border-radius:9px; border:1.5px solid transparent; background:var(--surface-2); padding:6px 7px; display:flex; flex-direction:column; gap:4px; }
+  .cal-cell.empty{ background:transparent; }
+  .cal-cell.today{ border-color:var(--accent); }
+  .cal-day-num{ font-size:11.5px; color:var(--text-secondary); font-family:'IBM Plex Mono'; }
+  .cal-day-profit{ font-size:11.5px; font-weight:700; font-family:'IBM Plex Mono'; }
+  .cal-day-profit.pos{ color:var(--success); }
+  .cal-day-profit.neg{ color:var(--danger); }
+  @media (max-width:600px){ .cal-cell{ min-height:44px; padding:4px 5px; } .cal-day-profit{ font-size:10px; } }
+
   .db-banner{ background:var(--accent-soft); color:var(--accent-strong); border:1px solid var(--accent); font-size:12.5px; padding:8px 12px; border-radius:9px; margin-bottom:14px; }
   .db-banner a{ color:inherit; font-weight:600; }
   .db-banner.info{ background:var(--success-soft); color:var(--success); border-color:var(--success); }
@@ -400,6 +418,17 @@
   <!-- REGISTRO -->
   <section id="tab-log" class="tab-panel">
     <div class="stats-grid" id="statsGrid"></div>
+
+    <div class="card">
+      <div class="cal-header">
+        <button class="btn btn-sm" id="calPrevBtn" title="Mes anterior">&lsaquo;</button>
+        <div class="cal-title" id="calTitle"></div>
+        <button class="btn btn-sm" id="calNextBtn" title="Mes siguiente">&rsaquo;</button>
+        <div class="cal-spacer"></div>
+        <div class="cal-summary" id="calSummary"></div>
+      </div>
+      <div class="cal-grid" id="calGrid"></div>
+    </div>
 
     <div class="log-grid">
       <div class="card">
@@ -1368,9 +1397,74 @@
   function renderLog(){
     renderStats();
     renderChart();
+    renderCalendar();
     renderBookExposure();
     renderBetsTable();
   }
+
+  function fmtMoneyShort(n){
+    if(!isFinite(n)) n = 0;
+    var sign = n < 0 ? "-" : "";
+    var v = Math.abs(n);
+    var s;
+    if(v >= 1000000) s = (v/1000000).toFixed(v >= 10000000 ? 0 : 1).replace(/\.0$/, "") + "M";
+    else if(v >= 1000) s = (v/1000).toFixed(v >= 10000 ? 0 : 1).replace(/\.0$/, "") + "K";
+    else s = v.toFixed(0);
+    return sign + "$" + s;
+  }
+
+  var MONTH_NAMES = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
+  var DOW_LABELS = ["Dom","Lun","Mar","Mié","Jue","Vie","Sáb"];
+  var calendarMonth = (function(){ var d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1); })();
+
+  function renderCalendar(){
+    var year = calendarMonth.getFullYear();
+    var month = calendarMonth.getMonth();
+    document.getElementById("calTitle").textContent = MONTH_NAMES[month] + " " + year;
+
+    var daysInMonth = new Date(year, month + 1, 0).getDate();
+    var firstDow = new Date(year, month, 1).getDay();
+    var monthPrefix = year + "-" + String(month + 1).padStart(2, "0") + "-";
+
+    var perDay = {};
+    var totalProfit = 0, wins = 0, losses = 0, pushes = 0;
+    allBets.forEach(function(b){
+      if(b.status === "pendiente") return;
+      if(!b.date || b.date.indexOf(monthPrefix) !== 0) return;
+      var day = parseInt(b.date.slice(8, 10), 10);
+      if(!perDay[day]) perDay[day] = {profit: 0};
+      var p = b.profit || 0;
+      perDay[day].profit += p;
+      totalProfit += p;
+      if(b.status === "anulada"){ pushes++; }
+      else if(p >= 0){ wins++; } else { losses++; }
+    });
+
+    var todayStr2 = todayStr();
+    var html = DOW_LABELS.map(function(d){ return '<div class="cal-dow">' + d + '</div>'; }).join("");
+    for(var i = 0; i < firstDow; i++){ html += '<div class="cal-cell empty"></div>'; }
+    for(var day = 1; day <= daysInMonth; day++){
+      var dateStr = monthPrefix + String(day).padStart(2, "0");
+      var isToday = dateStr === todayStr2;
+      var info = perDay[day];
+      var profitHtml = info ? '<div class="cal-day-profit ' + (info.profit >= 0 ? "pos" : "neg") + '">' + fmtMoneyShort(info.profit) + '</div>' : "";
+      html += '<div class="cal-cell' + (isToday ? " today" : "") + '"><div class="cal-day-num">' + day + '</div>' + profitHtml + '</div>';
+    }
+    document.getElementById("calGrid").innerHTML = html;
+
+    document.getElementById("calSummary").innerHTML =
+      '<span>Récord: <strong>' + wins + '-' + losses + (pushes ? '-' + pushes : '') + '</strong></span>' +
+      '<span>Ganancia del mes: <strong class="' + (totalProfit >= 0 ? "pos" : "neg") + '">' + fmtMoney(totalProfit) + '</strong></span>';
+  }
+
+  document.getElementById("calPrevBtn").addEventListener("click", function(){
+    calendarMonth = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() - 1, 1);
+    renderCalendar();
+  });
+  document.getElementById("calNextBtn").addEventListener("click", function(){
+    calendarMonth = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + 1, 1);
+    renderCalendar();
+  });
 
   function renderStats(){
     var settled = allBets.filter(function(b){ return b.status === "liquidada"; });
