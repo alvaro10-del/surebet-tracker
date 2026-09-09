@@ -215,6 +215,19 @@
   .settle-panel{ background:var(--surface-2); border:1px solid var(--border); border-radius:10px; padding:10px; margin-top:6px; display:flex; flex-wrap:wrap; gap:6px; }
   .settle-panel .btn{ font-size:12px; }
 
+  .notes-panel{ background:var(--surface-2); border:1px solid var(--border); border-radius:10px; padding:10px; margin-top:6px; display:flex; flex-direction:column; gap:8px; }
+  .notes-panel textarea{
+    font-family:'IBM Plex Sans'; font-size:13px; color:var(--text-primary); background:var(--surface);
+    border:1px solid var(--border); border-radius:8px; padding:8px 10px; width:100%; min-height:60px; resize:vertical; outline:none;
+  }
+  .notes-panel textarea:focus{ border-color:var(--accent); }
+  .row-note-preview{ font-size:11.5px; color:var(--text-muted); margin-top:2px; max-width:220px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+
+  .stake-limit-warning{ background:var(--danger-soft); color:var(--danger); border:1px solid var(--danger); font-size:12.5px; padding:8px 12px; border-radius:9px; margin:-4px 0 14px; }
+
+  .stat-tile .sub-warn{ font-size:11px; color:var(--danger); font-weight:600; margin-top:4px; }
+  .pill.overdue{ background:var(--danger-soft); color:var(--danger); }
+
   .empty-state{ text-align:center; padding:40px 20px; color:var(--text-muted); }
   .empty-state .display{ font-size:20px; color:var(--text-secondary); margin-bottom:6px; }
 
@@ -386,6 +399,15 @@
           </div>
         </div>
 
+        <div class="field-row">
+          <div class="field">
+            <label for="betNotes">Notas (opcional)</label>
+            <input type="text" id="betNotes" placeholder="Ej: la cuota bajó justo antes de confirmar">
+          </div>
+        </div>
+
+        <div id="stakeLimitWarning"></div>
+
         <div class="actions-row">
           <span class="type-tag" id="validationMsg"></span>
           <button class="btn btn-accent" id="saveBetBtn">Guardar en registro</button>
@@ -472,14 +494,14 @@
   <section id="tab-books" class="tab-panel">
     <div class="card">
       <h3 class="card-title" style="font-size:17px;">Casas de apuestas</h3>
-      <p class="card-hint">Registrá en qué casas tenés cuenta, su estado y notas (límites, moneda, lo que sirva). Las que coincidan por nombre con las de tus apuestas van a mostrar un indicador de estado en "Capital comprometido por casa", en Registro.</p>
+      <p class="card-hint">Registrá en qué casas tenés cuenta, su estado y notas. Las que coincidan por nombre con las de tus apuestas van a mostrar un indicador de estado en "Capital comprometido por casa", en Registro. Si cargás un límite de stake, la calculadora te avisa si un cálculo lo supera.</p>
       <div class="toolbar-row">
         <button class="btn btn-sm btn-accent" id="addBookmakerBtn">+ Agregar casa</button>
       </div>
       <div class="table-wrap">
         <table id="bookmakersTable">
           <thead>
-            <tr><th>Casa</th><th>Estado</th><th>Saldo actual</th><th>Notas</th><th></th></tr>
+            <tr><th>Casa</th><th>Estado</th><th>Saldo actual</th><th>Límite de stake</th><th>Notas</th><th></th></tr>
           </thead>
           <tbody id="bookmakersTableBody"></tbody>
         </table>
@@ -565,6 +587,12 @@
     return 1 + (l.odds - 1) * (1 - c);
   }
 
+  function findBookmakerByName(name){
+    var key = (name || "").trim().toLowerCase();
+    if(!key) return null;
+    return allBookmakers.find(function(b){ return (b.name || "").trim().toLowerCase() === key; }) || null;
+  }
+
   document.getElementById("eventDate").value = todayStr();
 
   function renderLegs(){
@@ -641,6 +669,7 @@
     if(!validLegs || totalStake <= 0){
       badge.innerHTML = '<div class="badge plain">Completá casa, resultado y cuota &gt; 1.00</div>';
       metrics.innerHTML = "";
+      document.getElementById("stakeLimitWarning").innerHTML = "";
       document.getElementById("validationMsg").textContent = totalStake <= 0 ? "Ingresá un monto total mayor a 0." : "Faltan datos en algún resultado.";
       document.getElementById("saveBetBtn").disabled = true;
       lastComputation = null;
@@ -659,6 +688,17 @@
       var payout = stake * eo;
       return Object.assign({}, l, {stake: stake, payout: payout, profitIfWin: payout - totalStake});
     });
+
+    var limitWarnings = computedLegs.map(function(l){
+      var bm = findBookmakerByName(l.bookmaker);
+      if(bm && bm.stakeLimit && l.stake > bm.stakeLimit) return {bookmaker: l.bookmaker, stake: l.stake, limit: bm.stakeLimit};
+      return null;
+    }).filter(Boolean);
+    document.getElementById("stakeLimitWarning").innerHTML = limitWarnings.length
+      ? '<div class="stake-limit-warning">⚠ ' + limitWarnings.map(function(w){
+          return escapeHtml(w.bookmaker) + ' necesita ' + fmtMoney(w.stake) + ' pero su límite conocido es ' + fmtMoney(w.limit);
+        }).join(' · ') + ' — no vas a poder cubrir todo el monto ahí, la cobertura dejaría de ser completa.</div>'
+      : "";
 
     if(isMulti){
       badge.innerHTML = isSurebet
@@ -1095,6 +1135,7 @@
     if(!lastComputation) return;
     var eventName = document.getElementById("eventName").value.trim() || "(Sin nombre)";
     var eventDate = document.getElementById("eventDate").value || todayStr();
+    var notes = document.getElementById("betNotes").value.trim();
     var record = {
       event: eventName,
       date: eventDate,
@@ -1103,6 +1144,7 @@
       totalStake: lastComputation.totalStake,
       expectedProfit: lastComputation.expectedProfit,
       marketTiming: marketTiming,
+      notes: notes,
       legs: lastComputation.legs.map(function(l){
         return {bookmaker: l.bookmaker, outcome: l.outcome, odds: l.odds, commissionPct: l.commissionPct || 0, stake: l.stake};
       }),
@@ -1115,6 +1157,7 @@
     if(db){
       betsCollection().add(record).then(function(){
         toast("Apuesta guardada en el registro");
+        document.getElementById("betNotes").value = "";
       }).catch(function(err){
         toast("No se pudo guardar: " + (err && err.message ? err.message : "error"));
       });
@@ -1123,10 +1166,53 @@
       allBets.unshift(record);
       persistLocalBets();
       renderLog();
+      document.getElementById("betNotes").value = "";
       toast("Apuesta guardada en este navegador");
     }
   }
   document.getElementById("saveBetBtn").addEventListener("click", saveBet);
+
+  function computeBalanceDeltas(bet, kind, legIndex){
+    var deltas = {};
+    function add(name, amount){
+      var key = (name || "").trim().toLowerCase();
+      if(!key) return;
+      if(!deltas[key]) deltas[key] = {name: name, delta: 0};
+      deltas[key].delta += amount;
+    }
+    if(kind === "void") return deltas;
+    bet.legs.forEach(function(leg, i){
+      if(kind === "won" && i === legIndex){
+        add(leg.bookmaker, leg.stake * effOdds(leg));
+      } else {
+        add(leg.bookmaker, -leg.stake);
+      }
+    });
+    return deltas;
+  }
+
+  function applyBalanceDeltas(deltas){
+    var changes = [];
+    Object.keys(deltas).forEach(function(key){
+      var d = deltas[key];
+      var bm = findBookmakerByName(d.name);
+      if(!bm) return;
+      var newBalance = (bm.balance || 0) + d.delta;
+      changes.push(bm.name + " " + (d.delta >= 0 ? "+" : "") + fmtMoneyShort(d.delta));
+      if(db && bm.id){
+        db.doc("bookmakers/" + bm.id).update({balance: newBalance}).catch(function(err){
+          toast("No se pudo actualizar el saldo de " + bm.name + ": " + (err && err.message ? err.message : "error"));
+        });
+      } else {
+        bm.balance = newBalance;
+      }
+    });
+    if(!db && changes.length){
+      persistLocalBookmakers();
+      renderBookmakers();
+    }
+    return changes;
+  }
 
   function settleBet(betId, kind, legIndex){
     var bet = allBets.find(function(b){ return (b.id || b._localId) === betId; });
@@ -1141,6 +1227,8 @@
       profit = (leg.stake * effOdds(leg)) - bet.totalStake;
     }
     var status = kind === "void" ? "anulada" : "liquidada";
+    var balanceChanges = applyBalanceDeltas(computeBalanceDeltas(bet, kind, legIndex));
+    var balanceNote = balanceChanges.length ? (" — saldo: " + balanceChanges.join(", ")) : "";
 
     if(db && bet.id){
       db.doc("bets/" + bet.id).update({
@@ -1149,7 +1237,7 @@
         settledLegIndex: kind === "won" ? legIndex : null,
         settledAt: Date.now()
       }).then(function(){
-        toast("Apuesta liquidada");
+        toast("Apuesta liquidada" + balanceNote);
       }).catch(function(err){
         toast("No se pudo liquidar: " + (err && err.message ? err.message : "error"));
       });
@@ -1160,7 +1248,7 @@
       bet.settledAt = Date.now();
       persistLocalBets();
       renderLog();
-      toast("Apuesta liquidada");
+      toast("Apuesta liquidada" + balanceNote);
     }
   }
 
@@ -1249,13 +1337,15 @@
           }).join('') +
         '</select></td>' +
         '<td><input type="number" step="0.01" class="num-input bm-input" data-field="balance" value="'+(b.balance!=null?b.balance:0)+'"></td>' +
-        '<td><input type="text" class="bm-input" data-field="notes" value="'+escapeHtml(b.notes||"")+'" placeholder="Ej: límite $50/apuesta desde 03/2026"></td>' +
+        '<td><input type="number" step="1000" min="0" class="num-input bm-input" data-field="stakeLimit" value="'+(b.stakeLimit||"")+'" placeholder="Sin límite"></td>' +
+        '<td><input type="text" class="bm-input" data-field="notes" value="'+escapeHtml(b.notes||"")+'" placeholder="Ej: verificación pendiente"></td>' +
         '<td><button class="btn btn-sm btn-danger-ghost" data-action="delete-bookmaker" data-id="'+escapeHtml(id)+'">Borrar</button></td>' +
       '</tr>';
     }).join("");
     renderBookExposure();
   }
 
+  var NUMERIC_BM_FIELDS = {balance: true, stakeLimit: true};
   var bookmakersTableBody = document.getElementById("bookmakersTableBody");
   bookmakersTableBody.addEventListener("input", function(e){
     var input = e.target.closest("[data-field]");
@@ -1263,15 +1353,16 @@
     var tr = e.target.closest("tr");
     var bm = allBookmakers.find(function(b){ return (b.id || b._localId) === tr.dataset.id; });
     if(!bm) return;
-    bm[input.dataset.field] = input.dataset.field === "balance" ? (parseFloat(input.value) || 0) : input.value;
+    bm[input.dataset.field] = NUMERIC_BM_FIELDS[input.dataset.field] ? (parseFloat(input.value) || 0) : input.value;
   });
   bookmakersTableBody.addEventListener("change", function(e){
     var input = e.target.closest("[data-field]");
     if(!input) return;
     var tr = e.target.closest("tr");
-    var value = input.dataset.field === "balance" ? (parseFloat(input.value) || 0) : input.value;
+    var value = NUMERIC_BM_FIELDS[input.dataset.field] ? (parseFloat(input.value) || 0) : input.value;
     commitBookmakerField(tr.dataset.id, input.dataset.field, value);
     if(input.dataset.field === "name" || input.dataset.field === "status") renderBookExposure();
+    if(input.dataset.field === "name" || input.dataset.field === "stakeLimit") compute();
   });
   bookmakersTableBody.addEventListener("click", function(e){
     var btn = e.target.closest("[data-action='delete-bookmaker']");
@@ -1393,6 +1484,24 @@
 
   // ---------- Log rendering ----------
   var openSettlePanel = null;
+  var openNotesPanel = null;
+
+  function updateBetNotes(betId, notes){
+    var bet = allBets.find(function(b){ return (b.id || b._localId) === betId; });
+    if(!bet) return;
+    if(db && bet.id){
+      db.doc("bets/" + bet.id).update({notes: notes}).then(function(){
+        toast("Nota guardada");
+      }).catch(function(err){
+        toast("No se pudo guardar la nota: " + (err && err.message ? err.message : "error"));
+      });
+    } else {
+      bet.notes = notes;
+      persistLocalBets();
+      renderBetsTable();
+      toast("Nota guardada");
+    }
+  }
 
   function renderLog(){
     renderStats();
@@ -1473,15 +1582,18 @@
     var totalStakedSettled = settled.reduce(function(s,b){ return s + b.totalStake; }, 0);
     var roi = totalStakedSettled > 0 ? (totalProfit / totalStakedSettled) * 100 : 0;
     var enJuego = pending.reduce(function(s,b){ return s + b.totalStake; }, 0);
+    var today = todayStr();
+    var overdueCount = pending.filter(function(b){ return b.date && b.date < today; }).length;
 
     var tiles = [
       {label:"Beneficio neto", value: fmtMoney(totalProfit), cls: totalProfit>=0?"pos":"neg"},
       {label:"ROI sobre liquidadas", value: fmtPct(roi), cls: roi>=0?"pos":"neg"},
       {label:"Apostado (liquidado)", value: fmtMoney(totalStakedSettled), cls:""},
-      {label:"En juego (pendiente)", value: fmtMoney(enJuego), cls:""}
+      {label:"En juego (pendiente)", value: fmtMoney(enJuego), cls:"", warn: overdueCount ? (overdueCount + " atrasada" + (overdueCount===1?"":"s") + " sin liquidar") : ""}
     ];
     document.getElementById("statsGrid").innerHTML = tiles.map(function(t){
-      return '<div class="stat-tile"><div class="label">'+t.label+'</div><div class="value '+t.cls+' num">'+t.value+'</div></div>';
+      return '<div class="stat-tile"><div class="label">'+t.label+'</div><div class="value '+t.cls+' num">'+t.value+'</div>' +
+        (t.warn ? '<div class="sub-warn">⚠ '+t.warn+'</div>' : '') + '</div>';
     }).join("");
   }
 
@@ -1607,12 +1719,16 @@
     empty.style.display = "none";
 
     var typeLabels = {surebet:"Surebet", multi:"Multi", simple:"Simple"};
+    var today = todayStr();
 
     tbody.innerHTML = allBets.map(function(b){
       var id = b.id || b._localId;
       var books = b.legs.map(function(l){ return escapeHtml(l.bookmaker); }).join(", ");
+      var isOverdue = b.status === "pendiente" && b.date && b.date < today;
       var statusPill;
-      if(b.status === "pendiente"){
+      if(isOverdue){
+        statusPill = '<span class="pill overdue">Atrasada</span>';
+      } else if(b.status === "pendiente"){
         statusPill = '<span class="pill pending">Pendiente</span>';
       } else if(b.status === "anulada"){
         statusPill = '<span class="pill void">Anulada</span>';
@@ -1621,6 +1737,8 @@
       }
       var resultCell = b.status === "pendiente" ? '<span class="type-tag">—</span>' :
         '<span class="cell-num '+((b.profit||0)>=0?"metric-value pos":"metric-value neg")+'">'+fmtMoney(b.profit||0)+'</span>';
+
+      var eventCell = escapeHtml(b.event) + (b.notes ? '<div class="row-note-preview" title="'+escapeHtml(b.notes)+'">📝 '+escapeHtml(b.notes)+'</div>' : '');
 
       var settlePanel = "";
       if(openSettlePanel === id && b.status === "pendiente"){
@@ -1634,20 +1752,30 @@
           '</div></td></tr>';
       }
 
-      var actionsCell = b.status === "pendiente"
-        ? '<button class="btn btn-sm" data-action="toggle-settle" data-id="'+id+'">Liquidar</button> <button class="btn btn-sm btn-danger-ghost" data-action="delete" data-id="'+id+'">Borrar</button>'
-        : '<button class="btn btn-sm btn-danger-ghost" data-action="delete" data-id="'+id+'">Borrar</button>';
+      var notesPanel = "";
+      if(openNotesPanel === id){
+        notesPanel = '<tr><td colspan="8"><div class="notes-panel">' +
+          '<textarea data-notes-input="'+id+'" placeholder="Ej: la cuota bajó justo antes de confirmar, ajusté a mano">'+escapeHtml(b.notes||"")+'</textarea>' +
+          '<div class="actions-row"><span></span><button class="btn btn-sm btn-accent" data-action="save-notes" data-id="'+id+'">Guardar nota</button></div>' +
+          '</div></td></tr>';
+      }
+
+      var actionsCell = (b.status === "pendiente"
+        ? '<button class="btn btn-sm" data-action="toggle-settle" data-id="'+id+'">Liquidar</button> '
+        : '') +
+        '<button class="btn btn-sm" data-action="toggle-notes" data-id="'+id+'">Notas</button> ' +
+        '<button class="btn btn-sm btn-danger-ghost" data-action="delete" data-id="'+id+'">Borrar</button>';
 
       return '<tr>' +
         '<td class="cell-num">'+escapeHtml(b.date)+'</td>' +
-        '<td>'+escapeHtml(b.event)+'</td>' +
+        '<td>'+eventCell+'</td>' +
         '<td><span class="type-tag">'+(typeLabels[b.type]||b.type)+'</span></td>' +
         '<td style="max-width:180px;">'+books+'</td>' +
         '<td class="cell-num">'+fmtMoney(b.totalStake)+'</td>' +
         '<td>'+statusPill+'</td>' +
         '<td>'+resultCell+'</td>' +
         '<td>'+actionsCell+'</td>' +
-      '</tr>' + settlePanel;
+      '</tr>' + settlePanel + notesPanel;
     }).join("");
   }
 
@@ -1672,6 +1800,14 @@
       settleBet(id, "void", null);
     } else if(action === "delete"){
       deleteBet(id);
+    } else if(action === "toggle-notes"){
+      openNotesPanel = openNotesPanel === id ? null : id;
+      renderBetsTable();
+    } else if(action === "save-notes"){
+      var textarea = document.querySelector('[data-notes-input="' + id + '"]');
+      var notes = textarea ? textarea.value.trim() : "";
+      openNotesPanel = null;
+      updateBetNotes(id, notes);
     }
   });
 
