@@ -103,17 +103,19 @@ export default {
         },
         body: JSON.stringify({
           model: ANTHROPIC_MODEL,
-          max_tokens: 1800,
+          max_tokens: 4096,
           messages: [{ role: "user", content }],
         }),
       });
     } catch (e) {
+      console.log("fetch to anthropic threw:", String(e));
       return json({ error: "upstream_error" }, 502, env);
     }
 
     if (!anthropicResp.ok) {
       let detail = "";
       try { detail = await anthropicResp.text(); } catch (e) {}
+      console.log("anthropic non-ok status:", anthropicResp.status, "detail:", detail.slice(0, 800));
       return json({ error: "upstream_error", status: anthropicResp.status, detail: detail.slice(0, 500) }, 502, env);
     }
 
@@ -125,6 +127,7 @@ export default {
     }
 
     if (!text) {
+      console.log("empty text. stop_reason:", data.stop_reason, "block types:", (data.content || []).map((b) => b.type), "usage:", JSON.stringify(data.usage));
       return json({ error: "empty_completion" }, 502, env);
     }
     return json({ text }, 200, env);

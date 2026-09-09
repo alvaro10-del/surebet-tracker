@@ -364,7 +364,7 @@
         <div class="field-row">
           <div class="field">
             <label for="totalStake">Monto total a invertir</label>
-            <input type="number" min="0" step="0.01" class="num-input" id="totalStake" value="200">
+            <input type="number" min="0" step="1000" class="num-input" id="totalStake" value="200000">
           </div>
         </div>
 
@@ -478,7 +478,7 @@
     if(!isFinite(n)) n = 0;
     var sign = n < 0 ? "-" : "";
     var v = Math.abs(n);
-    return sign + "$" + v.toLocaleString("en-US",{minimumFractionDigits:2, maximumFractionDigits:2});
+    return sign + "$" + v.toLocaleString("es-CO",{minimumFractionDigits:0, maximumFractionDigits:0}) + " COP";
   }
   function fmtPct(n){
     if(!isFinite(n)) n = 0;
@@ -985,7 +985,8 @@
       "resultado, la suma, el margen o recargo resultante) — si hay displayedPct, compará tu margen calculado contra ese número " +
       "y avisá si no coinciden; (c) la instrucción concreta de qué anotar/hacer, en el formato: \"Entrá a {casa1}, buscá {mercado}, " +
       "apostá ${monto1} a {resultado1} a cuota {cuota1}. Entrá a {casa2}, apostá ${monto2} a {resultado2} a cuota {cuota2}.\" " +
-      "usando un capital de ejemplo de 100 unidades repartido según la fórmula; (d) un riesgo concreto a vigilar antes de " +
+      "usando un capital de ejemplo de 200.000 pesos colombianos (COP) repartido según la fórmula — todos los montos en COP, sin " +
+      "decimales; (d) un riesgo concreto a vigilar antes de " +
       "confirmar (la cuota puede moverse, hace falta saldo previo cargado en cada casa). No expliques qué es una surebet en " +
       "términos generales, andá directo al caso concreto.\n\n" +
       "Respondé con SOLO un JSON con esta forma exacta, sin texto adicional:\n" +
