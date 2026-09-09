@@ -228,6 +228,18 @@
   .toast{ background:var(--text-primary); color:var(--bg); font-size:13px; padding:10px 14px; border-radius:9px; box-shadow:var(--shadow); opacity:0; transform:translateY(6px); transition:opacity .18s ease, transform .18s ease; }
   .toast.show{ opacity:1; transform:translateY(0); }
 
+  .mode-row{ display:flex; align-items:center; gap:8px; margin:0 4px 14px; }
+  .mode-label{ font-size:11.5px; color:var(--text-muted); font-weight:600; text-transform:uppercase; letter-spacing:0.04em; }
+  .mode-toggle{ display:flex; gap:4px; background:var(--surface-2); border:1px solid var(--border); border-radius:9px; padding:3px; }
+  .mode-btn{
+    appearance:none; border:none; background:transparent; color:var(--text-secondary);
+    font-family:'IBM Plex Sans'; font-weight:600; font-size:12.5px; padding:6px 12px;
+    border-radius:6px; cursor:pointer; display:flex; align-items:center; gap:6px;
+  }
+  .mode-btn.active{ background:var(--surface); color:var(--accent-strong); box-shadow:var(--shadow); }
+  .mode-btn:disabled{ cursor:not-allowed; color:var(--text-muted); opacity:.7; }
+  .mode-soon{ font-size:9.5px; text-transform:uppercase; letter-spacing:0.04em; background:var(--accent-soft); color:var(--accent-strong); padding:1px 5px; border-radius:100px; }
+
   .db-banner{ background:var(--accent-soft); color:var(--accent-strong); border:1px solid var(--accent); font-size:12.5px; padding:8px 12px; border-radius:9px; margin-bottom:14px; }
   .db-banner a{ color:inherit; font-weight:600; }
   .db-banner.info{ background:var(--success-soft); color:var(--success); border-color:var(--success); }
@@ -293,6 +305,14 @@
       <button class="tab-btn" data-tab="log">Registro &amp; P&amp;L</button>
       <button class="tab-btn" data-tab="books">Casas</button>
     </nav>
+  </div>
+
+  <div class="mode-row">
+    <span class="mode-label">Modo:</span>
+    <div class="mode-toggle">
+      <button class="mode-btn active" data-mode="prematch" type="button">Prepartido</button>
+      <button class="mode-btn" data-mode="live" type="button" disabled title="Próximamente — las cuotas en vivo cambian demasiado rápido para un análisis confiable por captura">En vivo <span class="mode-soon">pronto</span></button>
+    </div>
   </div>
 
   <div id="dbBanner" class="db-banner" style="display:none;"></div>
@@ -491,6 +511,17 @@
       document.querySelectorAll(".tab-panel").forEach(function(p){ p.classList.remove("active"); });
       btn.classList.add("active");
       document.getElementById("tab-" + btn.dataset.tab).classList.add("active");
+    });
+  });
+
+  // ---------- Mode: prepartido / en vivo (solo prepartido activo por ahora) ----------
+  var marketTiming = "prematch";
+  document.querySelectorAll(".mode-btn").forEach(function(btn){
+    btn.addEventListener("click", function(){
+      if(btn.disabled) return;
+      document.querySelectorAll(".mode-btn").forEach(function(b){ b.classList.remove("active"); });
+      btn.classList.add("active");
+      marketTiming = btn.dataset.mode;
     });
   });
 
@@ -881,6 +912,15 @@
       var explanationHtml = opp.explanation
         ? escapeHtml(opp.explanation).split(/\n+/).map(function(p){ return '<p class="opp-explanation">' + p + "</p>"; }).join("")
         : "";
+      var pctCheckHtml = "";
+      if(opp.displayedPct != null){
+        var diff = Math.abs(stats.profitPct - opp.displayedPct);
+        pctCheckHtml = '<div class="type-tag">La app de origen mostraba ' + fmtPct(opp.displayedPct) +
+          (diff > 0.3 ? ' — no coincide del todo con lo calculado acá, revisá las cuotas.' : ' — coincide con lo calculado acá.') + '</div>';
+      }
+      var liveWarningHtml = opp.live
+        ? '<div class="photo-note-block">Esta oportunidad parece estar EN VIVO. La app solo procesa mercados prepartido por ahora — las cuotas en vivo cambian todo el tiempo, así que esta captura puede estar desactualizada. Confirmá los precios actuales antes de usarla.</div>'
+        : "";
       return '<div class="opp-card">' +
         '<div class="opp-header">' +
           '<div><strong>' + escapeHtml(opp.event || "Evento sin nombre") + '</strong>' +
@@ -889,6 +929,8 @@
           '<span class="badge-mini ' + badgeCls + '">' + badgeText + '</span>' +
         '</div>' +
         '<div class="opp-legs type-tag">' + legsList + '</div>' +
+        pctCheckHtml +
+        liveWarningHtml +
         explanationHtml +
         '<button class="btn btn-sm btn-accent" data-load-opp="' + i + '">Cargar en la calculadora</button>' +
       '</div>';
@@ -917,22 +959,37 @@
     status.textContent = "Analizando " + selectedPhotoFiles.length + " imagen" + (selectedPhotoFiles.length===1?"":"es") + "...";
     document.getElementById("photoResults").innerHTML = "";
 
-    var prompt = "Estas imágenes son capturas relacionadas con arbitraje deportivo (surebets): pueden ser de una herramienta que " +
-      "escanea cuotas como BetBurger, o capturas sueltas de distintas casas de apuestas para el mismo evento.\n\n" +
+    var modeNote = marketTiming === "prematch"
+      ? "Esta app por ahora solo procesa mercados PREPARTIDO (pre-match) — antes de que arranque el evento, con hora/fecha fija. " +
+        "Si una fila o captura muestra que el evento ya está EN VIVO (reloj corriendo, marcador en tiempo real, tiempo transcurrido " +
+        "tipo \"23'\", o la palabra \"en vivo\"/\"live\"), marcá esa oportunidad con \"live\": true igual la devolvés, pero avisá en su " +
+        "explicación que las cuotas en vivo cambian muy rápido y esta captura puede estar desactualizada."
+      : "";
+
+    var prompt = "Estas imágenes son capturas relacionadas con arbitraje deportivo (surebets). Pueden ser una LISTA con muchas filas " +
+      "de oportunidades (como el feed de BetBurger, cada fila con un evento, un % de ganancia a la izquierda, y dos o más cuotas " +
+      "emparejadas — normalmente resaltadas o agrupadas visualmente — cada una de una casa distinta), o capturas sueltas de una o " +
+      "dos casas de apuestas para el mismo evento. " + modeNote + "\n\n" +
       "Tu tarea:\n" +
-      "1. Identificá una o más oportunidades de arbitraje. Cada oportunidad es UN mercado de UN evento con las cuotas de sus " +
-      "distintos resultados en, idealmente, distintas casas. Si varias imágenes muestran cuotas del mismo evento y mercado, " +
-      "combinalas en una sola oportunidad.\n" +
+      "1. Identificá CADA oportunidad de arbitraje visible, una por fila si es una lista tipo BetBurger — no te quedes solo con la " +
+      "primera. Cada oportunidad es UN mercado de UN evento con las cuotas de sus distintos resultados (típicamente 2: las dos " +
+      "cuotas emparejadas/resaltadas de esa fila) en, idealmente, distintas casas. Si varias imágenes muestran cuotas del mismo " +
+      "evento y mercado, combinalas en una sola oportunidad.\n" +
       "2. Para cada oportunidad devolvé el evento, el mercado (si hay notación abreviada como 1X2, TO/TU, AH1/AH2, BTTS, " +
-      "escribí el nombre completo en \"market\") y la lista de casas con su cuota decimal.\n" +
-      "3. Escribí una explicación breve (4 a 8 oraciones) dirigida a alguien que va a ejecutar esa apuesta ahora mismo: si la " +
-      "notación del mercado no es obvia, explicala en una frase; mostrá el cálculo con los números REALES de la imagen " +
-      "(probabilidad implícita de cada resultado, la suma, el margen o recargo resultante); repartí un capital de ejemplo de " +
-      "100 unidades entre las casas y mostrá la ganancia; cerrá con un riesgo concreto a vigilar antes de confirmar (por " +
-      "ejemplo que la cuota puede moverse, o que hace falta saldo previo cargado en cada casa). No expliques qué es una " +
-      "surebet en términos generales, andá directo al caso concreto.\n\n" +
+      "escribí el nombre completo en \"market\"), la lista de casas con su cuota decimal, y si la herramienta muestra un % de " +
+      "ganancia/ROI para esa fila (como \"0,99%\" a la izquierda) devolvelo en \"displayedPct\" como número (0.99), o null si no " +
+      "se ve ninguno.\n" +
+      "3. Escribí una explicación EJECUTABLE, tipo instructivo paso a paso, dirigida a alguien que va a hacer la apuesta ahora " +
+      "mismo con eso abierto en la pantalla — no una clase teórica. Estructura sugerida: (a) si la notación del mercado no es " +
+      "obvia, explicala en una frase; (b) el cálculo con los números REALES de la imagen (probabilidad implícita de cada " +
+      "resultado, la suma, el margen o recargo resultante) — si hay displayedPct, compará tu margen calculado contra ese número " +
+      "y avisá si no coinciden; (c) la instrucción concreta de qué anotar/hacer, en el formato: \"Entrá a {casa1}, buscá {mercado}, " +
+      "apostá ${monto1} a {resultado1} a cuota {cuota1}. Entrá a {casa2}, apostá ${monto2} a {resultado2} a cuota {cuota2}.\" " +
+      "usando un capital de ejemplo de 100 unidades repartido según la fórmula; (d) un riesgo concreto a vigilar antes de " +
+      "confirmar (la cuota puede moverse, hace falta saldo previo cargado en cada casa). No expliques qué es una surebet en " +
+      "términos generales, andá directo al caso concreto.\n\n" +
       "Respondé con SOLO un JSON con esta forma exacta, sin texto adicional:\n" +
-      '{"opportunities": [{"event": "string", "market": "string", "legs": [{"bookmaker": "string", "outcome": "string", "odds": 2.05}], "explanation": "string"}], "notes": "string opcional, solo si algo no se pudo leer bien"}\n\n' +
+      '{"opportunities": [{"event": "string", "market": "string", "displayedPct": 0.99, "live": false, "legs": [{"bookmaker": "string", "outcome": "string", "odds": 2.05}], "explanation": "string"}], "notes": "string opcional, solo si algo no se pudo leer bien"}\n\n' +
       "Las cuotas deben ser números decimales, nunca fraccionarias ni americanas. Si no encontrás ninguna oportunidad clara, " +
       'devolvé "opportunities": [] y explicá por qué en "notes".';
 
@@ -952,10 +1009,13 @@
             odds: Number(l && l.odds)
           };
         }).filter(function(l){ return l.bookmaker && l.odds > 1; });
+        var displayedPct = Number(o && o.displayedPct);
         return {
           event: String((o && o.event) || "").trim(),
           market: String((o && o.market) || "").trim(),
           explanation: String((o && o.explanation) || "").trim(),
+          displayedPct: isFinite(displayedPct) ? displayedPct : null,
+          live: !!(o && o.live),
           legs: oLegs
         };
       }).filter(function(o){ return o.legs.length >= 1; });
@@ -1009,6 +1069,7 @@
       impliedSum: lastComputation.impliedSum,
       totalStake: lastComputation.totalStake,
       expectedProfit: lastComputation.expectedProfit,
+      marketTiming: marketTiming,
       legs: lastComputation.legs.map(function(l){
         return {bookmaker: l.bookmaker, outcome: l.outcome, odds: l.odds, commissionPct: l.commissionPct || 0, stake: l.stake};
       }),
