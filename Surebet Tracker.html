@@ -1,0 +1,1502 @@
+<title>Surebet Tracker</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@600;700;800&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#EEF1F3;
+    --surface:#FFFFFF;
+    --surface-2:#F6F8FA;
+    --border:#DEE3E8;
+    --text-primary:#10161D;
+    --text-secondary:#57626D;
+    --text-muted:#8B96A2;
+    --accent:#B5721A;
+    --accent-strong:#8F5A12;
+    --accent-soft:#F7E9D3;
+    --success:#187A50;
+    --success-soft:#DFF3E9;
+    --danger:#BC3A32;
+    --danger-soft:#FAE4E2;
+    --shadow: 0 1px 2px rgba(16,22,29,0.04), 0 6px 20px rgba(16,22,29,0.06);
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#0B0F14;
+      --surface:#141B23;
+      --surface-2:#101620;
+      --border:#26313D;
+      --text-primary:#ECEFF2;
+      --text-secondary:#A3AEBA;
+      --text-muted:#6B7684;
+      --accent:#E2A044;
+      --accent-strong:#F0B769;
+      --accent-soft:#2C2214;
+      --success:#3FBE85;
+      --success-soft:#123626;
+      --danger:#E36F67;
+      --danger-soft:#3A1D1B;
+      --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 8px 24px rgba(0,0,0,0.35);
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#0B0F14;
+    --surface:#141B23;
+    --surface-2:#101620;
+    --border:#26313D;
+    --text-primary:#ECEFF2;
+    --text-secondary:#A3AEBA;
+    --text-muted:#6B7684;
+    --accent:#E2A044;
+    --accent-strong:#F0B769;
+    --accent-soft:#2C2214;
+    --success:#3FBE85;
+    --success-soft:#123626;
+    --danger:#E36F67;
+    --danger-soft:#3A1D1B;
+    --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 8px 24px rgba(0,0,0,0.35);
+  }
+
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:var(--bg);
+    color:var(--text-primary);
+    font-family:'IBM Plex Sans', system-ui, sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  .num{ font-family:'IBM Plex Mono', ui-monospace, monospace; font-variant-numeric:tabular-nums; }
+  h1,h2,h3,.display{ font-family:'Big Shoulders Display', system-ui, sans-serif; font-weight:800; letter-spacing:0.01em; text-wrap:balance; }
+
+  .app{ max-width:1180px; margin:0 auto; padding:20px 20px 60px; }
+
+  .topbar{
+    display:flex; align-items:center; justify-content:space-between; gap:16px;
+    padding:14px 4px 20px; flex-wrap:wrap;
+  }
+  .brand{ display:flex; align-items:baseline; gap:8px; }
+  .brand-mark{
+    font-family:'Big Shoulders Display', system-ui, sans-serif; font-weight:800;
+    font-size:26px; letter-spacing:0.02em; color:var(--text-primary);
+  }
+  .brand-mark span{ color:var(--accent); }
+  .brand-sub{ font-size:12px; color:var(--text-muted); letter-spacing:0.08em; text-transform:uppercase; }
+
+  .tabs{ display:flex; gap:4px; background:var(--surface-2); border:1px solid var(--border); border-radius:10px; padding:4px; }
+  .tab-btn{
+    appearance:none; border:none; background:transparent; color:var(--text-secondary);
+    font-family:'IBM Plex Sans'; font-weight:600; font-size:13.5px; padding:8px 16px;
+    border-radius:7px; cursor:pointer; transition:background .15s ease, color .15s ease;
+  }
+  .tab-btn:hover{ color:var(--text-primary); }
+  .tab-btn.active{ background:var(--surface); color:var(--accent-strong); box-shadow:var(--shadow); }
+
+  .tab-panel{ display:none; }
+  .tab-panel.active{ display:block; }
+
+  .card{
+    background:var(--surface); border:1px solid var(--border); border-radius:14px;
+    padding:20px; box-shadow:var(--shadow);
+  }
+  .card + .card{ margin-top:16px; }
+  .card-title{ font-size:20px; margin:0 0 4px; }
+  .card-hint{ font-size:12.5px; color:var(--text-muted); margin:0 0 16px; }
+
+  .calc-grid{ display:grid; grid-template-columns:1.1fr 0.9fr; gap:16px; align-items:start; }
+  @media (max-width:860px){ .calc-grid{ grid-template-columns:1fr; } }
+
+  .field-row{ display:flex; gap:10px; margin-bottom:12px; }
+  .field{ display:flex; flex-direction:column; gap:5px; flex:1; min-width:0; }
+  .field label{ font-size:11.5px; color:var(--text-secondary); font-weight:600; text-transform:uppercase; letter-spacing:0.04em; }
+  input[type="text"], input[type="number"], input[type="date"]{
+    font-family:'IBM Plex Sans'; font-size:14px; color:var(--text-primary);
+    background:var(--surface-2); border:1px solid var(--border); border-radius:8px;
+    padding:9px 10px; width:100%; outline:none; transition:border-color .15s ease;
+  }
+  input.num-input{ font-family:'IBM Plex Mono'; font-variant-numeric:tabular-nums; }
+  input:focus{ border-color:var(--accent); }
+  input.invalid{ border-color:var(--danger); }
+
+  .legs{ display:flex; flex-direction:column; gap:8px; margin:10px 0 14px; }
+  .leg-row{
+    display:grid; grid-template-columns:1.15fr 1.15fr 0.6fr 0.55fr auto; gap:8px; align-items:end;
+    background:var(--surface-2); border:1px solid var(--border); padding:10px; border-radius:10px;
+  }
+  @media (max-width:600px){ .leg-row{ grid-template-columns:1fr 1fr; } }
+  .leg-commission input{ font-size:12.5px; }
+  .leg-remove{
+    appearance:none; border:1px solid var(--border); background:var(--surface);
+    color:var(--text-muted); width:34px; height:34px; border-radius:8px; cursor:pointer;
+    font-size:16px; line-height:1; display:flex; align-items:center; justify-content:center;
+  }
+  .leg-remove:hover{ color:var(--danger); border-color:var(--danger); }
+  .leg-remove:disabled{ opacity:.35; cursor:not-allowed; }
+
+  .btn{
+    appearance:none; border:1px solid var(--border); background:var(--surface-2);
+    color:var(--text-primary); font-family:'IBM Plex Sans'; font-weight:600; font-size:13.5px;
+    padding:9px 14px; border-radius:8px; cursor:pointer; transition:filter .15s ease, background .15s ease;
+  }
+  .btn:hover{ filter:brightness(0.97); }
+  :root[data-theme="dark"] .btn:hover, @media (prefers-color-scheme:dark){ .btn:hover{ filter:brightness(1.15); } }
+  .btn-accent{ background:var(--accent); border-color:var(--accent); color:#fff; }
+  .btn-accent:hover{ filter:brightness(1.06); }
+  .btn-accent:disabled{ opacity:.45; cursor:not-allowed; }
+  .btn-ghost{ background:transparent; }
+  .btn-sm{ padding:6px 10px; font-size:12.5px; border-radius:7px; }
+  .btn-danger-ghost{ color:var(--danger); border-color:var(--danger-soft); background:var(--danger-soft); }
+
+  .actions-row{ display:flex; justify-content:space-between; align-items:center; gap:10px; margin-top:6px; }
+
+  .result-card{ position:sticky; top:16px; }
+  .badge{
+    display:inline-flex; align-items:center; gap:8px; font-family:'Big Shoulders Display';
+    font-weight:800; font-size:19px; padding:10px 14px; border-radius:10px; width:100%;
+    justify-content:center; letter-spacing:0.01em;
+  }
+  .badge.yes{ background:var(--success-soft); color:var(--success); }
+  .badge.no{ background:var(--danger-soft); color:var(--danger); }
+  .badge.plain{ background:var(--accent-soft); color:var(--accent-strong); }
+
+  .metric-row{ display:flex; justify-content:space-between; align-items:baseline; padding:10px 0; border-bottom:1px dashed var(--border); }
+  .metric-row:last-of-type{ border-bottom:none; }
+  .metric-label{ font-size:12.5px; color:var(--text-secondary); }
+  .metric-value{ font-size:16px; font-weight:600; }
+  .metric-value.pos{ color:var(--success); }
+  .metric-value.neg{ color:var(--danger); }
+
+  .prob-bar{ height:8px; border-radius:4px; background:var(--surface-2); border:1px solid var(--border); overflow:hidden; margin-top:6px; position:relative; }
+  .prob-bar-fill{ height:100%; border-radius:4px; }
+  .prob-bar-fill.ok{ background:var(--success); }
+  .prob-bar-fill.bad{ background:var(--danger); }
+  .prob-bar-mark{ position:absolute; top:-3px; bottom:-3px; width:2px; background:var(--text-primary); opacity:.5; }
+
+  table{ width:100%; border-collapse:collapse; font-size:13.5px; }
+  th{ text-align:left; font-size:11px; text-transform:uppercase; letter-spacing:0.04em; color:var(--text-muted); font-weight:600; padding:8px 10px; border-bottom:1px solid var(--border); }
+  td{ padding:9px 10px; border-bottom:1px solid var(--border); vertical-align:middle; }
+  tr:last-child td{ border-bottom:none; }
+  .table-wrap{ overflow-x:auto; }
+  .cell-num{ font-family:'IBM Plex Mono'; font-variant-numeric:tabular-nums; }
+
+  .stats-grid{ display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-bottom:16px; }
+  @media (max-width:760px){ .stats-grid{ grid-template-columns:repeat(2,1fr); } }
+  .stat-tile{ background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:14px 16px; box-shadow:var(--shadow); }
+  .stat-tile .label{ font-size:11px; text-transform:uppercase; letter-spacing:0.05em; color:var(--text-muted); font-weight:600; }
+  .stat-tile .value{ font-family:'Big Shoulders Display'; font-size:27px; font-weight:800; margin-top:4px; font-variant-numeric:tabular-nums; }
+  .stat-tile .value.pos{ color:var(--success); }
+  .stat-tile .value.neg{ color:var(--danger); }
+
+  .log-grid{ display:grid; grid-template-columns:1.5fr 1fr; gap:16px; align-items:stretch; }
+  @media (max-width:860px){ .log-grid{ grid-template-columns:1fr; } }
+
+  .chart-wrap{ position:relative; }
+  .chart-empty{ color:var(--text-muted); font-size:13.5px; padding:40px 10px; text-align:center; }
+  .chart-tooltip{
+    position:absolute; pointer-events:none; background:var(--text-primary); color:var(--bg);
+    font-size:12px; padding:6px 9px; border-radius:7px; transform:translate(-50%,-115%);
+    white-space:nowrap; opacity:0; transition:opacity .1s ease; font-family:'IBM Plex Mono';
+    z-index:5;
+  }
+  .chart-tooltip.show{ opacity:1; }
+
+  .book-bar-row{ display:flex; align-items:center; gap:10px; padding:7px 0; }
+  .book-bar-label{ width:96px; flex-shrink:0; font-size:12.5px; color:var(--text-secondary); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .book-bar-track{ flex:1; height:12px; background:var(--surface-2); border-radius:4px; overflow:hidden; }
+  .book-bar-fill{ height:100%; background:var(--accent); border-radius:4px; }
+  .book-bar-value{ width:78px; text-align:right; flex-shrink:0; font-size:12.5px; font-family:'IBM Plex Mono'; }
+
+  .pill{ display:inline-flex; align-items:center; gap:4px; font-size:11px; font-weight:600; padding:3px 8px; border-radius:100px; text-transform:uppercase; letter-spacing:0.03em; }
+  .pill.pending{ background:var(--accent-soft); color:var(--accent-strong); }
+  .pill.settled-pos{ background:var(--success-soft); color:var(--success); }
+  .pill.settled-neg{ background:var(--danger-soft); color:var(--danger); }
+  .pill.void{ background:var(--surface-2); color:var(--text-muted); }
+  .type-tag{ font-size:11px; color:var(--text-muted); }
+
+  .settle-panel{ background:var(--surface-2); border:1px solid var(--border); border-radius:10px; padding:10px; margin-top:6px; display:flex; flex-wrap:wrap; gap:6px; }
+  .settle-panel .btn{ font-size:12px; }
+
+  .empty-state{ text-align:center; padding:40px 20px; color:var(--text-muted); }
+  .empty-state .display{ font-size:20px; color:var(--text-secondary); margin-bottom:6px; }
+
+  details.help{ margin-top:16px; }
+  details.help summary{ cursor:pointer; font-size:13px; font-weight:600; color:var(--text-secondary); }
+  details.help[open] summary{ margin-bottom:10px; }
+  details.help p{ font-size:13px; color:var(--text-secondary); line-height:1.55; margin:6px 0; }
+  details.help code{ background:var(--surface-2); padding:1px 5px; border-radius:4px; font-family:'IBM Plex Mono'; font-size:12px; }
+
+  .toast-region{ position:fixed; bottom:18px; right:18px; display:flex; flex-direction:column; gap:8px; z-index:50; }
+  .toast{ background:var(--text-primary); color:var(--bg); font-size:13px; padding:10px 14px; border-radius:9px; box-shadow:var(--shadow); opacity:0; transform:translateY(6px); transition:opacity .18s ease, transform .18s ease; }
+  .toast.show{ opacity:1; transform:translateY(0); }
+
+  .db-banner{ background:var(--accent-soft); color:var(--accent-strong); border:1px solid var(--accent); font-size:12.5px; padding:8px 12px; border-radius:9px; margin-bottom:14px; }
+  .db-banner a{ color:inherit; font-weight:600; }
+  .db-banner.info{ background:var(--success-soft); color:var(--success); border-color:var(--success); }
+
+  .photo-avail{ font-size:12.5px; color:var(--text-muted); background:var(--surface-2); border:1px solid var(--border); border-radius:9px; padding:8px 12px; margin-top:4px; }
+  .photo-avail.warn{ background:var(--accent-soft); color:var(--accent-strong); border-color:var(--accent); }
+  .photo-upload-ui{ display:none; margin-top:14px; }
+  .photo-row{ display:flex; gap:16px; align-items:flex-start; flex-wrap:wrap; }
+  .photo-controls{ display:flex; flex-direction:column; gap:8px; min-width:220px; }
+  .photo-thumbs{ display:flex; flex-wrap:wrap; gap:8px; max-width:340px; }
+  .photo-thumb{ position:relative; width:64px; height:64px; border-radius:9px; overflow:hidden; border:1px solid var(--border); background:var(--surface-2); }
+  .photo-thumb img{ width:100%; height:100%; object-fit:cover; display:block; }
+  .photo-thumb-remove{
+    position:absolute; top:2px; right:2px; width:18px; height:18px; border-radius:50%;
+    border:none; background:rgba(16,22,29,0.72); color:#fff; font-size:12px; line-height:1;
+    cursor:pointer; display:flex; align-items:center; justify-content:center;
+  }
+  .photo-add-tile{
+    width:64px; height:64px; border-radius:9px; border:1.5px dashed var(--border); background:var(--surface-2);
+    color:var(--text-muted); font-size:22px; cursor:pointer; display:flex; align-items:center; justify-content:center;
+    font-family:'IBM Plex Sans'; transition:border-color .15s ease, color .15s ease;
+  }
+  .photo-add-tile:hover{ border-color:var(--accent); color:var(--accent); }
+  .photo-status{ font-size:12.5px; color:var(--text-muted); max-width:420px; }
+  .photo-note{ font-size:11px; color:var(--text-muted); max-width:280px; line-height:1.5; }
+
+  .photo-note-block{ background:var(--accent-soft); color:var(--accent-strong); font-size:12.5px; padding:8px 12px; border-radius:9px; margin-bottom:12px; }
+  .opp-card{ background:var(--surface-2); border:1px solid var(--border); border-radius:12px; padding:14px; margin-top:12px; }
+  .opp-header{ display:flex; justify-content:space-between; align-items:flex-start; gap:10px; flex-wrap:wrap; margin-bottom:6px; }
+  .badge-mini{ font-family:'IBM Plex Mono'; font-size:11.5px; font-weight:600; padding:4px 9px; border-radius:100px; white-space:nowrap; }
+  .badge-mini.yes{ background:var(--success-soft); color:var(--success); }
+  .badge-mini.no{ background:var(--danger-soft); color:var(--danger); }
+  .badge-mini.plain{ background:var(--accent-soft); color:var(--accent-strong); }
+  .opp-legs{ margin-bottom:8px; }
+  .opp-explanation{ font-size:13px; line-height:1.6; color:var(--text-secondary); margin:0 0 10px; }
+
+  .bm-dot{ width:7px; height:7px; border-radius:50%; display:inline-block; margin-right:6px; flex-shrink:0; }
+  .bm-dot.activa{ background:var(--success); }
+  .bm-dot.limitada{ background:var(--accent); }
+  .bm-dot.cerrada{ background:var(--danger); }
+
+  .toolbar-row{ display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:14px; }
+  .toolbar-spacer{ flex:1; }
+  .toolbar-hint{ font-size:11.5px; color:var(--text-muted); }
+
+  .bm-input, select.bm-select{
+    font-family:'IBM Plex Sans'; font-size:13px; color:var(--text-primary);
+    background:var(--surface); border:1px solid var(--border); border-radius:7px;
+    padding:6px 8px; width:100%; outline:none;
+  }
+  .bm-input:focus, select.bm-select:focus{ border-color:var(--accent); }
+
+  @media (prefers-reduced-motion: reduce){ *{ transition:none !important; animation:none !important; } }
+</style>
+
+<div class="app">
+  <div class="topbar">
+    <div class="brand">
+      <div class="brand-mark">SUREBET<span>//</span>TRACKER</div>
+    </div>
+    <nav class="tabs">
+      <button class="tab-btn active" data-tab="calc">Calculadora</button>
+      <button class="tab-btn" data-tab="log">Registro &amp; P&amp;L</button>
+      <button class="tab-btn" data-tab="books">Casas</button>
+    </nav>
+  </div>
+
+  <div id="dbBanner" class="db-banner" style="display:none;"></div>
+
+  <!-- CALCULADORA -->
+  <section id="tab-calc" class="tab-panel active">
+    <div class="card photo-card" id="photoCard">
+      <h2 class="card-title" style="font-size:17px;">Cargar desde capturas (BetBurger y similares)</h2>
+      <p class="card-hint">Pegá (Ctrl+V) o subí una o varias capturas de una app de comparación de cuotas. Claude identifica cada oportunidad, arma las cuotas y te explica cómo ejecutarla — siempre revisá los datos antes de guardar.</p>
+      <div class="photo-avail" id="photoAvailStatus">Verificando si esta vista admite analizar imágenes con Claude…</div>
+      <div class="photo-upload-ui" id="photoUploadUI">
+        <div class="photo-row">
+          <div class="photo-thumbs" id="photoThumbs"></div>
+          <div class="photo-controls">
+            <input type="file" id="photoInput" accept="image/*" multiple hidden>
+            <span class="photo-note">Tip: con esta pestaña abierta, pegá capturas directo con Ctrl+V (Cmd+V en Mac) — no hace falta guardarlas primero.</span>
+            <button class="btn btn-sm btn-accent" id="analyzePhotoBtn" disabled>Analizar con Claude</button>
+            <span class="photo-status" id="photoStatus"></span>
+            <span class="photo-note">Cada análisis usa tu cuota de uso de Claude.</span>
+          </div>
+        </div>
+        <div id="photoResults"></div>
+      </div>
+    </div>
+
+    <div class="calc-grid">
+      <div class="card">
+        <h2 class="card-title">Calculadora de surebets</h2>
+        <p class="card-hint">Cargá la cuota de cada resultado en distintas casas de apuestas. Si la suma de probabilidades implícitas es menor a 1, hay arbitraje.</p>
+
+        <div class="field-row">
+          <div class="field">
+            <label for="eventName">Evento</label>
+            <input type="text" id="eventName" placeholder="Ej: River vs Boca — Ganador del partido">
+          </div>
+          <div class="field" style="flex:0 0 160px;">
+            <label for="eventDate">Fecha</label>
+            <input type="date" id="eventDate">
+          </div>
+        </div>
+
+        <div id="legsContainer" class="legs"></div>
+
+        <div class="actions-row" style="margin-bottom:14px;">
+          <button class="btn btn-sm" id="addLegBtn">+ Agregar resultado</button>
+          <span class="type-tag" id="legsHint"></span>
+        </div>
+
+        <div class="field-row">
+          <div class="field">
+            <label for="totalStake">Monto total a invertir</label>
+            <input type="number" min="0" step="0.01" class="num-input" id="totalStake" value="200">
+          </div>
+        </div>
+
+        <div class="actions-row">
+          <span class="type-tag" id="validationMsg"></span>
+          <button class="btn btn-accent" id="saveBetBtn">Guardar en registro</button>
+        </div>
+
+        <details class="help">
+          <summary>¿Cómo se calcula?</summary>
+          <p>Para cada resultado se toma la probabilidad implícita <code>1 / cuota</code>. Sumando la de todos los resultados de un mercado obtenés <code>Σ(1/cuota)</code>.</p>
+          <p>Si esa suma es <strong>menor a 1</strong>, existe una surebet: repartiendo el monto total en proporción a <code>(1/cuota) / Σ</code> en cada casa, ganás lo mismo sin importar el resultado. La ganancia garantizada es <code>(1 − Σ) / Σ</code> sobre el monto invertido.</p>
+          <p>Si la suma es <strong>mayor a 1</strong>, ese margen es el recargo (overround) de las casas de apuestas y no hay arbitraje posible con esas cuotas.</p>
+        </details>
+      </div>
+
+      <div class="card result-card">
+        <h2 class="card-title">Resultado</h2>
+        <div id="resultBadge"></div>
+        <div id="resultMetrics"></div>
+        <div class="table-wrap">
+          <table id="distTable">
+            <thead>
+              <tr><th>Casa</th><th>Resultado</th><th>Cuota</th><th>Com.</th><th>Apostar</th><th>Si gana</th></tr>
+            </thead>
+            <tbody id="distTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- REGISTRO -->
+  <section id="tab-log" class="tab-panel">
+    <div class="stats-grid" id="statsGrid"></div>
+
+    <div class="log-grid">
+      <div class="card">
+        <h3 class="card-title" style="font-size:17px;">Evolución de ganancia acumulada</h3>
+        <p class="card-hint">Apuestas liquidadas, en orden cronológico.</p>
+        <div class="chart-wrap" id="chartWrap"></div>
+      </div>
+      <div class="card">
+        <h3 class="card-title" style="font-size:17px;">Capital comprometido por casa</h3>
+        <p class="card-hint">Suma de lo apostado en cada bookmaker.</p>
+        <div id="bookExposure"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3 class="card-title" style="font-size:17px;">Historial de apuestas</h3>
+      <div class="toolbar-row">
+        <button class="btn btn-sm" id="exportJsonBtn">Exportar backup (JSON)</button>
+        <button class="btn btn-sm" id="importJsonBtn">Importar backup (JSON)</button>
+        <input type="file" id="importJsonInput" accept="application/json,.json" hidden>
+        <button class="btn btn-sm" id="exportCsvBtn">Exportar CSV</button>
+        <div class="toolbar-spacer"></div>
+        <span class="toolbar-hint" id="storageModeHint"></span>
+      </div>
+      <div class="table-wrap">
+        <table id="betsTable">
+          <thead>
+            <tr><th>Fecha</th><th>Evento</th><th>Tipo</th><th>Casas</th><th>Apostado</th><th>Estado</th><th>Resultado</th><th></th></tr>
+          </thead>
+          <tbody id="betsTableBody"></tbody>
+        </table>
+      </div>
+      <div id="betsEmpty" class="empty-state" style="display:none;">
+        <div class="display">Todavía no hay apuestas registradas</div>
+        <div>Armá una surebet en la Calculadora y guardala para empezar tu historial.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- CASAS DE APUESTAS -->
+  <section id="tab-books" class="tab-panel">
+    <div class="card">
+      <h3 class="card-title" style="font-size:17px;">Casas de apuestas</h3>
+      <p class="card-hint">Registrá en qué casas tenés cuenta, su estado y notas (límites, moneda, lo que sirva). Las que coincidan por nombre con las de tus apuestas van a mostrar un indicador de estado en "Capital comprometido por casa", en Registro.</p>
+      <div class="toolbar-row">
+        <button class="btn btn-sm btn-accent" id="addBookmakerBtn">+ Agregar casa</button>
+      </div>
+      <div class="table-wrap">
+        <table id="bookmakersTable">
+          <thead>
+            <tr><th>Casa</th><th>Estado</th><th>Saldo actual</th><th>Notas</th><th></th></tr>
+          </thead>
+          <tbody id="bookmakersTableBody"></tbody>
+        </table>
+      </div>
+      <div id="bookmakersEmpty" class="empty-state" style="display:none;">
+        <div class="display">Todavía no agregaste casas</div>
+        <div>Sumá las casas donde tenés cuenta para llevar el estado de cada una.</div>
+      </div>
+    </div>
+  </section>
+</div>
+
+<div class="toast-region" id="toastRegion"></div>
+
+<script>
+(function(){
+  "use strict";
+
+  function escapeHtml(s){
+    return String(s == null ? "" : s).replace(/[&<>"']/g, function(c){
+      return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];
+    });
+  }
+  function fmtMoney(n){
+    if(!isFinite(n)) n = 0;
+    var sign = n < 0 ? "-" : "";
+    var v = Math.abs(n);
+    return sign + "$" + v.toLocaleString("en-US",{minimumFractionDigits:2, maximumFractionDigits:2});
+  }
+  function fmtPct(n){
+    if(!isFinite(n)) n = 0;
+    return (n >= 0 ? "+" : "") + n.toFixed(2) + "%";
+  }
+  function todayStr(){
+    var d = new Date();
+    var m = String(d.getMonth()+1).padStart(2,"0");
+    var day = String(d.getDate()).padStart(2,"0");
+    return d.getFullYear() + "-" + m + "-" + day;
+  }
+  function uid(){ return Math.random().toString(36).slice(2,10) + Date.now().toString(36); }
+  function toast(msg){
+    var region = document.getElementById("toastRegion");
+    var el = document.createElement("div");
+    el.className = "toast";
+    el.textContent = msg;
+    region.appendChild(el);
+    requestAnimationFrame(function(){ el.classList.add("show"); });
+    setTimeout(function(){
+      el.classList.remove("show");
+      setTimeout(function(){ el.remove(); }, 220);
+    }, 2800);
+  }
+
+  // ---------- Tabs ----------
+  document.querySelectorAll(".tab-btn").forEach(function(btn){
+    btn.addEventListener("click", function(){
+      document.querySelectorAll(".tab-btn").forEach(function(b){ b.classList.remove("active"); });
+      document.querySelectorAll(".tab-panel").forEach(function(p){ p.classList.remove("active"); });
+      btn.classList.add("active");
+      document.getElementById("tab-" + btn.dataset.tab).classList.add("active");
+    });
+  });
+
+  // ---------- Calculator state ----------
+  var legs = [
+    {bookmaker:"Casa A", outcome:"Local", odds:2.05, commissionPct:0},
+    {bookmaker:"Casa B", outcome:"Visitante", odds:2.10, commissionPct:0}
+  ];
+
+  function effOdds(l){
+    var c = Math.min(Math.max((l.commissionPct || 0) / 100, 0), 0.99);
+    return 1 + (l.odds - 1) * (1 - c);
+  }
+
+  document.getElementById("eventDate").value = todayStr();
+
+  function renderLegs(){
+    var container = document.getElementById("legsContainer");
+    container.innerHTML = "";
+    legs.forEach(function(leg, i){
+      var row = document.createElement("div");
+      row.className = "leg-row";
+      row.innerHTML =
+        '<div class="field"><label>Casa</label><input type="text" class="leg-bookmaker" data-i="'+i+'" value="'+escapeHtml(leg.bookmaker)+'" placeholder="Bookmaker"></div>' +
+        '<div class="field"><label>Resultado</label><input type="text" class="leg-outcome" data-i="'+i+'" value="'+escapeHtml(leg.outcome)+'" placeholder="Ej: Gana Local"></div>' +
+        '<div class="field"><label>Cuota</label><input type="number" step="0.01" min="1.01" class="num-input leg-odds" data-i="'+i+'" value="'+leg.odds+'"></div>' +
+        '<div class="field leg-commission"><label title="Solo para exchanges (ej: Betfair), que cobran comisión sobre la ganancia">Com. %</label><input type="number" step="0.5" min="0" max="99" class="num-input leg-commission-input" data-i="'+i+'" value="'+(leg.commissionPct||0)+'"></div>' +
+        '<button class="leg-remove" data-i="'+i+'" title="Quitar" '+(legs.length<=1?'disabled':'')+'>&times;</button>';
+      container.appendChild(row);
+    });
+
+    container.querySelectorAll(".leg-bookmaker").forEach(function(inp){
+      inp.addEventListener("input", function(){ legs[+inp.dataset.i].bookmaker = inp.value; compute(); });
+    });
+    container.querySelectorAll(".leg-outcome").forEach(function(inp){
+      inp.addEventListener("input", function(){ legs[+inp.dataset.i].outcome = inp.value; compute(); });
+    });
+    container.querySelectorAll(".leg-odds").forEach(function(inp){
+      inp.addEventListener("input", function(){
+        var v = parseFloat(inp.value);
+        legs[+inp.dataset.i].odds = isFinite(v) ? v : 0;
+        inp.classList.toggle("invalid", !(v > 1));
+        compute();
+      });
+    });
+    container.querySelectorAll(".leg-commission-input").forEach(function(inp){
+      inp.addEventListener("input", function(){
+        var v = parseFloat(inp.value);
+        legs[+inp.dataset.i].commissionPct = isFinite(v) ? v : 0;
+        compute();
+      });
+    });
+    container.querySelectorAll(".leg-remove").forEach(function(btn){
+      btn.addEventListener("click", function(){
+        if(legs.length <= 1) return;
+        legs.splice(+btn.dataset.i, 1);
+        renderLegs();
+        compute();
+      });
+    });
+
+    document.getElementById("legsHint").textContent = legs.length + " resultado" + (legs.length===1?"":"s") + (legs.length>=2 ? " · mercado completo" : " · agregá al menos 2 para chequear surebet");
+  }
+
+  document.getElementById("addLegBtn").addEventListener("click", function(){
+    legs.push({bookmaker:"", outcome:"", odds:0, commissionPct:0});
+    renderLegs();
+    compute();
+  });
+
+  function currentTotalStake(){
+    var v = parseFloat(document.getElementById("totalStake").value);
+    return isFinite(v) && v > 0 ? v : 0;
+  }
+
+  var lastComputation = null;
+
+  function compute(){
+    var totalStake = currentTotalStake();
+    var validLegs = legs.every(function(l){ return l.odds > 1 && l.bookmaker.trim() && l.outcome.trim(); });
+    var impliedSum = legs.reduce(function(s,l){ return s + (l.odds > 1 ? 1/effOdds(l) : 0); }, 0);
+
+    var badge = document.getElementById("resultBadge");
+    var metrics = document.getElementById("resultMetrics");
+    var tbody = document.getElementById("distTableBody");
+    tbody.innerHTML = "";
+
+    if(!validLegs || totalStake <= 0){
+      badge.innerHTML = '<div class="badge plain">Completá casa, resultado y cuota &gt; 1.00</div>';
+      metrics.innerHTML = "";
+      document.getElementById("validationMsg").textContent = totalStake <= 0 ? "Ingresá un monto total mayor a 0." : "Faltan datos en algún resultado.";
+      document.getElementById("saveBetBtn").disabled = true;
+      lastComputation = null;
+      return;
+    }
+    document.getElementById("validationMsg").textContent = "";
+    document.getElementById("saveBetBtn").disabled = false;
+
+    var isMulti = legs.length >= 2;
+    var isSurebet = isMulti && impliedSum < 1;
+    var profitPct = impliedSum > 0 ? (1/impliedSum - 1) * 100 : 0;
+
+    var computedLegs = legs.map(function(l){
+      var eo = effOdds(l);
+      var stake = isMulti ? (totalStake * (1/eo) / impliedSum) : totalStake;
+      var payout = stake * eo;
+      return Object.assign({}, l, {stake: stake, payout: payout, profitIfWin: payout - totalStake});
+    });
+
+    if(isMulti){
+      badge.innerHTML = isSurebet
+        ? '<div class="badge yes">SUREBET — ganancia garantizada</div>'
+        : '<div class="badge no">No es surebet</div>';
+    } else {
+      badge.innerHTML = '<div class="badge plain">Apuesta simple (1 resultado)</div>';
+    }
+
+    var barPct = Math.min(100, impliedSum * 100);
+    var metricsHtml = '';
+    metricsHtml += '<div class="metric-row"><span class="metric-label">Suma de probabilidades implícitas (Σ 1/cuota)</span><span class="metric-value num">'+impliedSum.toFixed(4)+'</span></div>';
+    metricsHtml += '<div class="prob-bar"><div class="prob-bar-fill '+(impliedSum<1?"ok":"bad")+'" style="width:'+barPct+'%"></div><div class="prob-bar-mark" style="left:100%"></div></div>';
+    if(isMulti){
+      metricsHtml += '<div class="metric-row"><span class="metric-label">'+(isSurebet?"Ganancia garantizada":"Recargo de casas (overround)")+'</span><span class="metric-value '+(isSurebet?"pos":"neg")+' num">'+fmtPct(isSurebet?profitPct:-profitPct)+'</span></div>';
+      var guaranteedProfit = totalStake * (1 - impliedSum) / impliedSum;
+      metricsHtml += '<div class="metric-row"><span class="metric-label">Ganancia neta estimada</span><span class="metric-value '+(guaranteedProfit>=0?"pos":"neg")+' num">'+fmtMoney(guaranteedProfit)+'</span></div>';
+    } else {
+      metricsHtml += '<div class="metric-row"><span class="metric-label">Ganancia si gana</span><span class="metric-value pos num">'+fmtMoney(computedLegs[0].profitIfWin)+'</span></div>';
+    }
+    metrics.innerHTML = metricsHtml;
+
+    computedLegs.forEach(function(l){
+      var tr = document.createElement("tr");
+      tr.innerHTML =
+        '<td>'+escapeHtml(l.bookmaker)+'</td>' +
+        '<td>'+escapeHtml(l.outcome)+'</td>' +
+        '<td class="cell-num">'+l.odds.toFixed(2)+'</td>' +
+        '<td class="cell-num">'+(l.commissionPct ? l.commissionPct+"%" : "—")+'</td>' +
+        '<td class="cell-num">'+fmtMoney(l.stake)+'</td>' +
+        '<td class="cell-num">'+fmtMoney(l.payout)+'</td>';
+      tbody.appendChild(tr);
+    });
+
+    lastComputation = {
+      totalStake: totalStake,
+      impliedSum: impliedSum,
+      isSurebet: isSurebet,
+      isMulti: isMulti,
+      profitPct: isMulti ? (isSurebet ? profitPct : -profitPct) : null,
+      expectedProfit: isMulti ? (totalStake * (1 - impliedSum) / impliedSum) : computedLegs[0].profitIfWin,
+      legs: computedLegs
+    };
+  }
+
+  document.getElementById("totalStake").addEventListener("input", compute);
+
+  // ---------- Photo-to-surebet (sample capability) ----------
+  var sampleFn = null;
+  var sampleImageCaps = null;
+  var selectedPhotoFiles = [];
+  var lastOpportunities = [];
+
+  function setPhotoAvail(msg, warn){
+    var el = document.getElementById("photoAvailStatus");
+    el.textContent = msg;
+    el.classList.toggle("warn", !!warn);
+  }
+
+  function showPhotoUpload(caps){
+    sampleImageCaps = caps;
+    document.getElementById("photoAvailStatus").style.display = "none";
+    document.getElementById("photoUploadUI").style.display = "block";
+    if(caps.mediaTypes && caps.mediaTypes.length){
+      document.getElementById("photoInput").setAttribute("accept", caps.mediaTypes.join(","));
+    }
+    renderPhotoThumbs();
+  }
+
+  function initSample(){
+    if(typeof claude === "undefined" || !claude || typeof claude.use !== "function"){
+      setPhotoAvail("No disponible: esta página no se está ejecutando dentro de un visor de Claude que admita esta función.", true);
+      return;
+    }
+    var settled = false;
+    // The runtime resolves use() null after ~10s when no viewer answers — let the viewer know we're still waiting past the first couple seconds.
+    setTimeout(function(){
+      if(!settled) setPhotoAvail("Sigue verificando disponibilidad… si esto tarda más de unos segundos, puede que esta vista no admita pedirle ayuda a Claude.");
+    }, 3000);
+
+    claude.use("sample").then(function(ns){
+      settled = true;
+      if(!ns){
+        setPhotoAvail("No disponible en esta vista: el artifact no pudo obtener permiso para pedirle ayuda a Claude aquí (puede depender de la app o de la configuración de la cuenta/organización). Podés seguir usando la calculadora a mano.", true);
+        return;
+      }
+      sampleFn = ns;
+      sampleFn.limits().then(function(caps){
+        if(caps && caps.images){
+          showPhotoUpload(caps.images);
+        } else {
+          setPhotoAvail("Podés pedirle ayuda a Claude en este artifact, pero esta vista todavía no admite adjuntar imágenes.", true);
+        }
+      }).catch(function(){
+        setPhotoAvail("No se pudo confirmar si esta vista admite imágenes. Probá recargar la página.", true);
+      });
+    }).catch(function(){
+      settled = true;
+      setPhotoAvail("No se pudo verificar la disponibilidad de Claude en esta vista. Probá recargar la página.", true);
+    });
+  }
+
+  function renderPhotoThumbs(){
+    var wrap = document.getElementById("photoThumbs");
+    var html = selectedPhotoFiles.map(function(f, i){
+      return '<div class="photo-thumb"><img src="'+URL.createObjectURL(f)+'" alt="Captura '+(i+1)+'">' +
+        '<button class="photo-thumb-remove" data-i="'+i+'" title="Quitar">&times;</button></div>';
+    }).join("");
+    html += '<button class="photo-add-tile" id="addPhotoTile" title="Agregar captura">+</button>';
+    wrap.innerHTML = html;
+    wrap.querySelectorAll(".photo-thumb-remove").forEach(function(btn){
+      btn.addEventListener("click", function(){
+        selectedPhotoFiles.splice(+btn.dataset.i, 1);
+        renderPhotoThumbs();
+      });
+    });
+    document.getElementById("addPhotoTile").addEventListener("click", function(){
+      document.getElementById("photoInput").click();
+    });
+    document.getElementById("analyzePhotoBtn").disabled = selectedPhotoFiles.length === 0;
+  }
+
+  function addPhotoFiles(fileList){
+    var arr = Array.prototype.filter.call(fileList, function(f){ return f && f.type && f.type.indexOf("image") === 0; });
+    if(arr.length === 0) return;
+    var maxCount = (sampleImageCaps && sampleImageCaps.maxCount) || 10;
+    selectedPhotoFiles = selectedPhotoFiles.concat(arr);
+    if(selectedPhotoFiles.length > maxCount){
+      selectedPhotoFiles = selectedPhotoFiles.slice(0, maxCount);
+      toast("Se tomaron las primeras " + maxCount + " imágenes (límite de esta vista).");
+    }
+    renderPhotoThumbs();
+    document.getElementById("photoStatus").textContent = "";
+  }
+
+  document.getElementById("photoInput").addEventListener("change", function(e){
+    addPhotoFiles(e.target.files);
+    e.target.value = "";
+  });
+
+  document.addEventListener("paste", function(e){
+    var uploadUi = document.getElementById("photoUploadUI");
+    if(uploadUi.style.display !== "block") return;
+    if(!document.getElementById("tab-calc").classList.contains("active")) return;
+    var items = (e.clipboardData || window.clipboardData) ? (e.clipboardData || window.clipboardData).items : null;
+    if(!items) return;
+    var files = [];
+    for(var i = 0; i < items.length; i++){
+      if(items[i].type && items[i].type.indexOf("image") === 0){
+        var f = items[i].getAsFile();
+        if(f) files.push(f);
+      }
+    }
+    if(files.length === 0) return;
+    e.preventDefault();
+    addPhotoFiles(files);
+  });
+
+  var PHOTO_ERROR_MESSAGES = {
+    not_granted: "No autorizaste el uso de Claude en este artifact — probá de nuevo y aceptá el permiso.",
+    images_unavailable: "Esta vista no admite subir imágenes.",
+    image_rejected: "Alguna imagen no es válida (formato o tamaño). Probá con PNG o JPG más livianos.",
+    rate_limited: "Demasiadas solicitudes por ahora. Esperá un momento y probá de nuevo.",
+    session_expired: "Tu sesión expiró — recargá la página.",
+    invalid_json: "No pude interpretar la respuesta. Probá con capturas más claras.",
+    empty_completion: "No pude leer datos en esas imágenes. Probá con capturas más claras o cargá los datos a mano.",
+    refused: "Claude no pudo procesar esas imágenes.",
+    upstream_error: "Hubo un problema temporal analizando las imágenes. Probá de nuevo en un momento.",
+    sampling_disabled: "Esta cuenta no tiene disponible pedirle ayuda a Claude en artifacts.",
+    prompt_too_large: "Son demasiadas imágenes juntas para un solo análisis. Probá con menos a la vez."
+  };
+
+  function analyzeLegsStats(legsArr){
+    var impliedSum = legsArr.reduce(function(s,l){ return s + (l.odds > 1 ? 1/l.odds : 0); }, 0);
+    var isSurebet = legsArr.length >= 2 && impliedSum < 1;
+    var profitPct = impliedSum > 0 ? (1/impliedSum - 1) * 100 : 0;
+    return {impliedSum: impliedSum, isSurebet: isSurebet, profitPct: profitPct};
+  }
+
+  function renderPhotoResults(opportunities, notes){
+    lastOpportunities = opportunities;
+    var el = document.getElementById("photoResults");
+    var html = "";
+    if(notes){
+      html += '<div class="photo-note-block">' + escapeHtml(notes) + '</div>';
+    }
+    if(opportunities.length === 0){
+      el.innerHTML = html;
+      return;
+    }
+    html += opportunities.map(function(opp, i){
+      var stats = analyzeLegsStats(opp.legs);
+      var badgeCls = opp.legs.length >= 2 ? (stats.isSurebet ? "yes" : "no") : "plain";
+      var badgeText = opp.legs.length >= 2
+        ? (stats.isSurebet ? ("SUREBET · " + fmtPct(stats.profitPct)) : "No es surebet")
+        : "Resultado único";
+      var legsList = opp.legs.map(function(l){
+        return escapeHtml(l.bookmaker) + " — " + escapeHtml(l.outcome) + ' <span class="cell-num">@' + l.odds.toFixed(2) + "</span>";
+      }).join(" &nbsp;·&nbsp; ");
+      var explanationHtml = opp.explanation
+        ? escapeHtml(opp.explanation).split(/\n+/).map(function(p){ return '<p class="opp-explanation">' + p + "</p>"; }).join("")
+        : "";
+      return '<div class="opp-card">' +
+        '<div class="opp-header">' +
+          '<div><strong>' + escapeHtml(opp.event || "Evento sin nombre") + '</strong>' +
+            (opp.market ? ' <span class="type-tag">· ' + escapeHtml(opp.market) + '</span>' : '') +
+          '</div>' +
+          '<span class="badge-mini ' + badgeCls + '">' + badgeText + '</span>' +
+        '</div>' +
+        '<div class="opp-legs type-tag">' + legsList + '</div>' +
+        explanationHtml +
+        '<button class="btn btn-sm btn-accent" data-load-opp="' + i + '">Cargar en la calculadora</button>' +
+      '</div>';
+    }).join("");
+    el.innerHTML = html;
+    el.querySelectorAll("[data-load-opp]").forEach(function(btn){
+      btn.addEventListener("click", function(){
+        var opp = lastOpportunities[+btn.dataset.loadOpp];
+        if(!opp) return;
+        legs = opp.legs.map(function(l){ return {bookmaker: l.bookmaker, outcome: l.outcome, odds: l.odds, commissionPct: 0}; });
+        if(opp.event) document.getElementById("eventName").value = opp.event;
+        renderLegs();
+        compute();
+        document.querySelector(".calc-grid").scrollIntoView({behavior: "smooth", block: "start"});
+        toast("Cargado en la calculadora");
+      });
+    });
+  }
+
+  document.getElementById("analyzePhotoBtn").addEventListener("click", function(){
+    if(!sampleFn || selectedPhotoFiles.length === 0) return;
+    var btn = document.getElementById("analyzePhotoBtn");
+    var status = document.getElementById("photoStatus");
+    btn.disabled = true;
+    status.style.color = "var(--text-muted)";
+    status.textContent = "Analizando " + selectedPhotoFiles.length + " imagen" + (selectedPhotoFiles.length===1?"":"es") + "...";
+    document.getElementById("photoResults").innerHTML = "";
+
+    var prompt = "Estas imágenes son capturas relacionadas con arbitraje deportivo (surebets): pueden ser de una herramienta que " +
+      "escanea cuotas como BetBurger, o capturas sueltas de distintas casas de apuestas para el mismo evento.\n\n" +
+      "Tu tarea:\n" +
+      "1. Identificá una o más oportunidades de arbitraje. Cada oportunidad es UN mercado de UN evento con las cuotas de sus " +
+      "distintos resultados en, idealmente, distintas casas. Si varias imágenes muestran cuotas del mismo evento y mercado, " +
+      "combinalas en una sola oportunidad.\n" +
+      "2. Para cada oportunidad devolvé el evento, el mercado (si hay notación abreviada como 1X2, TO/TU, AH1/AH2, BTTS, " +
+      "escribí el nombre completo en \"market\") y la lista de casas con su cuota decimal.\n" +
+      "3. Escribí una explicación breve (4 a 8 oraciones) dirigida a alguien que va a ejecutar esa apuesta ahora mismo: si la " +
+      "notación del mercado no es obvia, explicala en una frase; mostrá el cálculo con los números REALES de la imagen " +
+      "(probabilidad implícita de cada resultado, la suma, el margen o recargo resultante); repartí un capital de ejemplo de " +
+      "100 unidades entre las casas y mostrá la ganancia; cerrá con un riesgo concreto a vigilar antes de confirmar (por " +
+      "ejemplo que la cuota puede moverse, o que hace falta saldo previo cargado en cada casa). No expliques qué es una " +
+      "surebet en términos generales, andá directo al caso concreto.\n\n" +
+      "Respondé con SOLO un JSON con esta forma exacta, sin texto adicional:\n" +
+      '{"opportunities": [{"event": "string", "market": "string", "legs": [{"bookmaker": "string", "outcome": "string", "odds": 2.05}], "explanation": "string"}], "notes": "string opcional, solo si algo no se pudo leer bien"}\n\n' +
+      "Las cuotas deben ser números decimales, nunca fraccionarias ni americanas. Si no encontrás ninguna oportunidad clara, " +
+      'devolvé "opportunities": [] y explicá por qué en "notes".';
+
+    sampleFn.json(prompt, {images: selectedPhotoFiles}).then(function(data){
+      btn.disabled = false;
+      var opps = Array.isArray(data && data.opportunities) ? data.opportunities : [];
+      opps = opps.map(function(o){
+        var oLegs = Array.isArray(o && o.legs) ? o.legs : [];
+        oLegs = oLegs.map(function(l){
+          return {
+            bookmaker: String((l && l.bookmaker) || "").trim(),
+            outcome: String((l && l.outcome) || "").trim(),
+            odds: Number(l && l.odds)
+          };
+        }).filter(function(l){ return l.bookmaker && l.odds > 1; });
+        return {
+          event: String((o && o.event) || "").trim(),
+          market: String((o && o.market) || "").trim(),
+          explanation: String((o && o.explanation) || "").trim(),
+          legs: oLegs
+        };
+      }).filter(function(o){ return o.legs.length >= 1; });
+
+      if(opps.length === 0){
+        status.style.color = "var(--danger)";
+        status.textContent = "No pude identificar oportunidades con cuotas válidas. Probá con otras capturas o cargá los datos a mano.";
+        renderPhotoResults([], (data && data.notes) ? String(data.notes) : "");
+        return;
+      }
+
+      status.style.color = "var(--success)";
+      status.textContent = "Listo — " + opps.length + " oportunidad" + (opps.length===1?"":"es") + " detectada" + (opps.length===1?"":"s") + ".";
+      renderPhotoResults(opps, (data && data.notes) ? String(data.notes) : "");
+    }).catch(function(err){
+      btn.disabled = false;
+      status.style.color = "var(--danger)";
+      var code = err && err.code;
+      status.textContent = PHOTO_ERROR_MESSAGES[code] || ("No se pudieron analizar las imágenes" + (err && err.message ? ": " + err.message : "."));
+    });
+  });
+
+  // ---------- Storage (cloud db, or localStorage when running outside the artifact viewer) ----------
+  var STORAGE_KEYS = { bets: "surebet-tracker:bets", bookmakers: "surebet-tracker:bookmakers" };
+  var db = null;
+  var allBets = [];
+  var allBookmakers = [];
+
+  function loadLocalJSON(key, fallback){
+    try{
+      var raw = localStorage.getItem(key);
+      return raw ? JSON.parse(raw) : fallback;
+    }catch(e){ return fallback; }
+  }
+  function saveLocalJSON(key, value){
+    try{ localStorage.setItem(key, JSON.stringify(value)); }catch(e){ /* storage full or unavailable */ }
+  }
+  function persistLocalBets(){ saveLocalJSON(STORAGE_KEYS.bets, allBets); }
+  function persistLocalBookmakers(){ saveLocalJSON(STORAGE_KEYS.bookmakers, allBookmakers); }
+
+  function betsCollection(){ return db.collection("bets"); }
+
+  function saveBet(){
+    if(!lastComputation) return;
+    var eventName = document.getElementById("eventName").value.trim() || "(Sin nombre)";
+    var eventDate = document.getElementById("eventDate").value || todayStr();
+    var record = {
+      event: eventName,
+      date: eventDate,
+      type: lastComputation.isMulti ? (lastComputation.isSurebet ? "surebet" : "multi") : "simple",
+      impliedSum: lastComputation.impliedSum,
+      totalStake: lastComputation.totalStake,
+      expectedProfit: lastComputation.expectedProfit,
+      legs: lastComputation.legs.map(function(l){
+        return {bookmaker: l.bookmaker, outcome: l.outcome, odds: l.odds, commissionPct: l.commissionPct || 0, stake: l.stake};
+      }),
+      status: "pendiente",
+      profit: null,
+      settledLegIndex: null,
+      createdAt: Date.now()
+    };
+
+    if(db){
+      betsCollection().add(record).then(function(){
+        toast("Apuesta guardada en el registro");
+      }).catch(function(err){
+        toast("No se pudo guardar: " + (err && err.message ? err.message : "error"));
+      });
+    } else {
+      record._localId = uid();
+      allBets.unshift(record);
+      persistLocalBets();
+      renderLog();
+      toast("Apuesta guardada en este navegador");
+    }
+  }
+  document.getElementById("saveBetBtn").addEventListener("click", saveBet);
+
+  function settleBet(betId, kind, legIndex){
+    var bet = allBets.find(function(b){ return (b.id || b._localId) === betId; });
+    if(!bet) return;
+    var profit;
+    if(kind === "void"){
+      profit = 0;
+    } else if(kind === "lost"){
+      profit = -bet.totalStake;
+    } else {
+      var leg = bet.legs[legIndex];
+      profit = (leg.stake * effOdds(leg)) - bet.totalStake;
+    }
+    var status = kind === "void" ? "anulada" : "liquidada";
+
+    if(db && bet.id){
+      db.doc("bets/" + bet.id).update({
+        status: status,
+        profit: profit,
+        settledLegIndex: kind === "won" ? legIndex : null,
+        settledAt: Date.now()
+      }).then(function(){
+        toast("Apuesta liquidada");
+      }).catch(function(err){
+        toast("No se pudo liquidar: " + (err && err.message ? err.message : "error"));
+      });
+    } else {
+      bet.status = status;
+      bet.profit = profit;
+      bet.settledLegIndex = kind === "won" ? legIndex : null;
+      bet.settledAt = Date.now();
+      persistLocalBets();
+      renderLog();
+      toast("Apuesta liquidada");
+    }
+  }
+
+  function deleteBet(betId){
+    if(!confirm("¿Eliminar esta apuesta del registro?")) return;
+    var bet = allBets.find(function(b){ return (b.id || b._localId) === betId; });
+    if(!bet) return;
+    if(db && bet.id){
+      db.doc("bets/" + bet.id).delete().then(function(){
+        toast("Apuesta eliminada");
+      }).catch(function(err){
+        toast("No se pudo eliminar: " + (err && err.message ? err.message : "error"));
+      });
+    } else {
+      allBets = allBets.filter(function(b){ return (b.id || b._localId) !== betId; });
+      persistLocalBets();
+      renderLog();
+      toast("Apuesta eliminada");
+    }
+  }
+
+  // ---------- Bookmakers (Casas de apuestas) ----------
+  var BOOKMAKER_STATUSES = {activa:"Activa", limitada:"Limitada", cerrada:"Cerrada"};
+
+  function addBookmakerRow(){
+    var rec = {name:"", status:"activa", balance:0, notes:"", createdAt: Date.now()};
+    if(db){
+      db.collection("bookmakers").add(rec).catch(function(err){
+        toast("No se pudo agregar la casa: " + (err && err.message ? err.message : "error"));
+      });
+    } else {
+      rec._localId = uid();
+      allBookmakers.unshift(rec);
+      persistLocalBookmakers();
+      renderBookmakers();
+    }
+  }
+  document.getElementById("addBookmakerBtn").addEventListener("click", addBookmakerRow);
+
+  function commitBookmakerField(id, field, value){
+    var bm = allBookmakers.find(function(b){ return (b.id || b._localId) === id; });
+    if(!bm) return;
+    bm[field] = value;
+    if(db && bm.id){
+      var patch = {}; patch[field] = value;
+      db.doc("bookmakers/" + bm.id).update(patch).catch(function(err){
+        toast("No se pudo guardar: " + (err && err.message ? err.message : "error"));
+      });
+    } else {
+      persistLocalBookmakers();
+    }
+  }
+
+  function removeBookmaker(id){
+    if(!confirm("¿Eliminar esta casa de la lista?")) return;
+    var bm = allBookmakers.find(function(b){ return (b.id || b._localId) === id; });
+    if(!bm) return;
+    if(db && bm.id){
+      db.doc("bookmakers/" + bm.id).delete().catch(function(err){
+        toast("No se pudo eliminar: " + (err && err.message ? err.message : "error"));
+      });
+    } else {
+      allBookmakers = allBookmakers.filter(function(b){ return (b.id || b._localId) !== id; });
+      persistLocalBookmakers();
+      renderBookmakers();
+    }
+  }
+
+  function renderBookmakers(){
+    var tbody = document.getElementById("bookmakersTableBody");
+    var empty = document.getElementById("bookmakersEmpty");
+    if(allBookmakers.length === 0){
+      tbody.innerHTML = "";
+      empty.style.display = "block";
+      renderBookExposure();
+      return;
+    }
+    empty.style.display = "none";
+    tbody.innerHTML = allBookmakers.map(function(b){
+      var id = b.id || b._localId;
+      return '<tr data-id="'+escapeHtml(id)+'">' +
+        '<td><input type="text" class="bm-input" data-field="name" value="'+escapeHtml(b.name||"")+'" placeholder="Nombre de la casa"></td>' +
+        '<td><select class="bm-select" data-field="status">' +
+          Object.keys(BOOKMAKER_STATUSES).map(function(s){
+            return '<option value="'+s+'"'+(b.status===s?' selected':'')+'>'+BOOKMAKER_STATUSES[s]+'</option>';
+          }).join('') +
+        '</select></td>' +
+        '<td><input type="number" step="0.01" class="num-input bm-input" data-field="balance" value="'+(b.balance!=null?b.balance:0)+'"></td>' +
+        '<td><input type="text" class="bm-input" data-field="notes" value="'+escapeHtml(b.notes||"")+'" placeholder="Ej: límite $50/apuesta desde 03/2026"></td>' +
+        '<td><button class="btn btn-sm btn-danger-ghost" data-action="delete-bookmaker" data-id="'+escapeHtml(id)+'">Borrar</button></td>' +
+      '</tr>';
+    }).join("");
+    renderBookExposure();
+  }
+
+  var bookmakersTableBody = document.getElementById("bookmakersTableBody");
+  bookmakersTableBody.addEventListener("input", function(e){
+    var input = e.target.closest("[data-field]");
+    if(!input) return;
+    var tr = e.target.closest("tr");
+    var bm = allBookmakers.find(function(b){ return (b.id || b._localId) === tr.dataset.id; });
+    if(!bm) return;
+    bm[input.dataset.field] = input.dataset.field === "balance" ? (parseFloat(input.value) || 0) : input.value;
+  });
+  bookmakersTableBody.addEventListener("change", function(e){
+    var input = e.target.closest("[data-field]");
+    if(!input) return;
+    var tr = e.target.closest("tr");
+    var value = input.dataset.field === "balance" ? (parseFloat(input.value) || 0) : input.value;
+    commitBookmakerField(tr.dataset.id, input.dataset.field, value);
+    if(input.dataset.field === "name" || input.dataset.field === "status") renderBookExposure();
+  });
+  bookmakersTableBody.addEventListener("click", function(e){
+    var btn = e.target.closest("[data-action='delete-bookmaker']");
+    if(!btn) return;
+    removeBookmaker(btn.dataset.id);
+  });
+
+  // ---------- Save / export files (downloads capability, or a plain download outside the sandboxed viewer) ----------
+  function classicDownload(blob, filename){
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement("a");
+    a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(function(){ URL.revokeObjectURL(url); }, 2000);
+  }
+
+  function saveFile(filename, mimeType, content){
+    var blob = new Blob([content], {type: mimeType});
+    if(typeof claude !== "undefined" && claude && typeof claude.use === "function"){
+      claude.use("downloads").then(function(downloads){
+        if(!downloads){ classicDownload(blob, filename); return; }
+        downloads.save({filename: filename, data: blob}).then(function(){
+          toast("Archivo guardado");
+        }).catch(function(err){
+          if(err && err.code === "declined") return;
+          toast("No se pudo guardar el archivo" + (err && err.message ? ": " + err.message : "."));
+        });
+      }).catch(function(){ classicDownload(blob, filename); });
+    } else {
+      classicDownload(blob, filename);
+    }
+  }
+
+  function csvEscape(v){
+    var s = String(v == null ? "" : v);
+    if(/[",\r\n]/.test(s)) s = '"' + s.replace(/"/g, '""') + '"';
+    return s;
+  }
+
+  document.getElementById("exportJsonBtn").addEventListener("click", function(){
+    var payload = {
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      bets: allBets.map(function(b){ var c = Object.assign({}, b); delete c._localId; return c; }),
+      bookmakers: allBookmakers.map(function(b){ var c = Object.assign({}, b); delete c._localId; return c; })
+    };
+    saveFile("surebet-tracker-backup-" + todayStr() + ".json", "application/json", JSON.stringify(payload, null, 2));
+  });
+
+  document.getElementById("exportCsvBtn").addEventListener("click", function(){
+    var header = ["Fecha","Evento","Tipo","Casas","Apostado","Estado","Resultado"];
+    var rows = allBets.map(function(b){
+      return [
+        b.date || "",
+        b.event || "",
+        b.type || "",
+        (b.legs || []).map(function(l){ return l.bookmaker; }).join(" | "),
+        (b.totalStake || 0).toFixed(2),
+        b.status || "",
+        b.status === "pendiente" ? "" : String(b.profit || 0)
+      ];
+    });
+    var csv = [header].concat(rows).map(function(r){ return r.map(csvEscape).join(","); }).join("\r\n");
+    saveFile("surebet-tracker-historial-" + todayStr() + ".csv", "text/csv", "﻿" + csv);
+  });
+
+  function upsertImported(collectionName, arr, incoming){
+    var body = Object.assign({}, incoming);
+    var incomingId = body.id || body._localId;
+    delete body.id; delete body._localId;
+    if(db){
+      if(incomingId){
+        db.doc(collectionName + "/" + incomingId).set(body).catch(function(err){
+          toast("Error importando un registro: " + (err && err.message ? err.message : "error"));
+        });
+      } else {
+        db.collection(collectionName).add(body).catch(function(err){
+          toast("Error importando un registro: " + (err && err.message ? err.message : "error"));
+        });
+      }
+      return;
+    }
+    var existing = incomingId ? arr.find(function(x){ return (x.id || x._localId) === incomingId; }) : null;
+    if(existing){
+      Object.assign(existing, body);
+    } else {
+      body._localId = incomingId || uid();
+      arr.push(body);
+    }
+  }
+
+  document.getElementById("importJsonBtn").addEventListener("click", function(){
+    document.getElementById("importJsonInput").click();
+  });
+  document.getElementById("importJsonInput").addEventListener("change", function(e){
+    var file = e.target.files && e.target.files[0];
+    e.target.value = "";
+    if(!file) return;
+    var reader = new FileReader();
+    reader.onload = function(){
+      var data;
+      try{ data = JSON.parse(reader.result); }catch(err){ toast("El archivo no es un backup JSON válido."); return; }
+      var importedBets = Array.isArray(data.bets) ? data.bets : [];
+      var importedBooks = Array.isArray(data.bookmakers) ? data.bookmakers : [];
+      if(importedBets.length === 0 && importedBooks.length === 0){ toast("El backup no tiene apuestas ni casas para importar."); return; }
+      if(!confirm("Se van a importar " + importedBets.length + " apuesta(s) y " + importedBooks.length + " casa(s). Los registros con el mismo id se actualizan; el resto se agrega. ¿Continuar?")) return;
+      importedBets.forEach(function(b){ upsertImported("bets", allBets, b); });
+      importedBooks.forEach(function(b){ upsertImported("bookmakers", allBookmakers, b); });
+      if(!db){
+        persistLocalBets();
+        persistLocalBookmakers();
+      }
+      renderLog();
+      renderBookmakers();
+      toast("Importación completada");
+    };
+    reader.readAsText(file);
+  });
+
+  // ---------- Log rendering ----------
+  var openSettlePanel = null;
+
+  function renderLog(){
+    renderStats();
+    renderChart();
+    renderBookExposure();
+    renderBetsTable();
+  }
+
+  function renderStats(){
+    var settled = allBets.filter(function(b){ return b.status === "liquidada"; });
+    var pending = allBets.filter(function(b){ return b.status === "pendiente"; });
+    var totalProfit = settled.reduce(function(s,b){ return s + (b.profit || 0); }, 0);
+    var totalStakedSettled = settled.reduce(function(s,b){ return s + b.totalStake; }, 0);
+    var roi = totalStakedSettled > 0 ? (totalProfit / totalStakedSettled) * 100 : 0;
+    var enJuego = pending.reduce(function(s,b){ return s + b.totalStake; }, 0);
+
+    var tiles = [
+      {label:"Beneficio neto", value: fmtMoney(totalProfit), cls: totalProfit>=0?"pos":"neg"},
+      {label:"ROI sobre liquidadas", value: fmtPct(roi), cls: roi>=0?"pos":"neg"},
+      {label:"Apostado (liquidado)", value: fmtMoney(totalStakedSettled), cls:""},
+      {label:"En juego (pendiente)", value: fmtMoney(enJuego), cls:""}
+    ];
+    document.getElementById("statsGrid").innerHTML = tiles.map(function(t){
+      return '<div class="stat-tile"><div class="label">'+t.label+'</div><div class="value '+t.cls+' num">'+t.value+'</div></div>';
+    }).join("");
+  }
+
+  function renderChart(){
+    var wrap = document.getElementById("chartWrap");
+    var settled = allBets
+      .filter(function(b){ return b.status === "liquidada"; })
+      .slice()
+      .sort(function(a,b){ return (a.settledAt||0) - (b.settledAt||0); });
+
+    if(settled.length === 0){
+      wrap.innerHTML = '<div class="chart-empty">Todavía no hay apuestas liquidadas.<br>Acá vas a ver la evolución de tu banca.</div>';
+      return;
+    }
+
+    var cum = 0;
+    var points = settled.map(function(b){
+      cum += (b.profit || 0);
+      return {date: b.date, cum: cum};
+    });
+
+    var W = 640, H = 220, padL = 46, padR = 14, padT = 16, padB = 24;
+    var innerW = W - padL - padR, innerH = H - padT - padB;
+
+    var values = points.map(function(p){ return p.cum; }).concat([0]);
+    var minV = Math.min.apply(null, values);
+    var maxV = Math.max.apply(null, values);
+    if(minV === maxV){ minV -= 1; maxV += 1; }
+    var pad = (maxV - minV) * 0.12;
+    minV -= pad; maxV += pad;
+
+    function xAt(i){ return padL + (points.length === 1 ? innerW/2 : (i/(points.length-1)) * innerW); }
+    function yAt(v){ return padT + innerH - ((v - minV)/(maxV - minV)) * innerH; }
+
+    var zeroY = yAt(0);
+    var linePts = points.map(function(p,i){ return xAt(i) + "," + yAt(p.cum); }).join(" ");
+    var areaPts = "M" + xAt(0) + "," + zeroY + " " + points.map(function(p,i){ return "L" + xAt(i) + "," + yAt(p.cum); }).join(" ") + " L" + xAt(points.length-1) + "," + zeroY + " Z";
+    var lastPt = points[points.length-1];
+
+    var svg = ''+
+      '<svg viewBox="0 0 '+W+' '+H+'" style="width:100%; height:220px; overflow:visible;" id="pnlSvg">' +
+        '<defs><linearGradient id="pnlGrad" x1="0" y1="0" x2="0" y2="1">' +
+          '<stop offset="0%" stop-color="var(--accent)" stop-opacity="0.28"/>' +
+          '<stop offset="100%" stop-color="var(--accent)" stop-opacity="0"/>' +
+        '</linearGradient></defs>' +
+        '<line x1="'+padL+'" y1="'+zeroY+'" x2="'+(W-padR)+'" y2="'+zeroY+'" stroke="var(--border)" stroke-width="1" stroke-dasharray="3,3"/>' +
+        '<path d="'+areaPts+'" fill="url(#pnlGrad)"/>' +
+        '<polyline points="'+linePts+'" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>' +
+        '<circle cx="'+xAt(points.length-1)+'" cy="'+yAt(lastPt.cum)+'" r="4" fill="var(--accent-strong)" stroke="var(--surface)" stroke-width="2"/>' +
+        '<text x="'+padL+'" y="'+(H-6)+'" font-size="10" fill="var(--text-muted)" font-family="IBM Plex Mono">'+escapeHtml(points[0].date)+'</text>' +
+        '<text x="'+(W-padR)+'" y="'+(H-6)+'" font-size="10" fill="var(--text-muted)" font-family="IBM Plex Mono" text-anchor="end">'+escapeHtml(lastPt.date)+'</text>' +
+        '<text x="2" y="'+(padT+4)+'" font-size="10" fill="var(--text-muted)" font-family="IBM Plex Mono">'+fmtMoney(maxV)+'</text>' +
+        '<text x="2" y="'+(H-padB)+'" font-size="10" fill="var(--text-muted)" font-family="IBM Plex Mono">'+fmtMoney(minV)+'</text>' +
+        '<line id="crosshair" x1="0" y1="'+padT+'" x2="0" y2="'+(H-padB)+'" stroke="var(--text-muted)" stroke-width="1" opacity="0"/>' +
+      '</svg>' +
+      '<div class="chart-tooltip" id="chartTooltip"></div>';
+
+    wrap.innerHTML = svg;
+
+    var svgEl = document.getElementById("pnlSvg");
+    var tooltip = document.getElementById("chartTooltip");
+    var crosshair = document.getElementById("crosshair");
+
+    svgEl.addEventListener("mousemove", function(e){
+      var rect = svgEl.getBoundingClientRect();
+      var scaleX = W / rect.width;
+      var mx = (e.clientX - rect.left) * scaleX;
+      var idx = 0, best = Infinity;
+      points.forEach(function(p,i){
+        var d = Math.abs(xAt(i) - mx);
+        if(d < best){ best = d; idx = i; }
+      });
+      var px = xAt(idx), py = yAt(points[idx].cum);
+      crosshair.setAttribute("x1", px); crosshair.setAttribute("x2", px);
+      crosshair.setAttribute("opacity", "0.5");
+      var scaleXInv = rect.width / W, scaleYInv = rect.height / H;
+      tooltip.style.left = (px * scaleXInv) + "px";
+      tooltip.style.top = (py * scaleYInv) + "px";
+      tooltip.textContent = points[idx].date + " · " + fmtMoney(points[idx].cum);
+      tooltip.classList.add("show");
+    });
+    svgEl.addEventListener("mouseleave", function(){
+      crosshair.setAttribute("opacity", "0");
+      tooltip.classList.remove("show");
+    });
+  }
+
+  function renderBookExposure(){
+    var el = document.getElementById("bookExposure");
+    var map = {};
+    allBets.forEach(function(b){
+      b.legs.forEach(function(l){
+        var key = (l.bookmaker || "?").trim() || "(sin nombre)";
+        map[key] = (map[key] || 0) + l.stake;
+      });
+    });
+    var entries = Object.keys(map).map(function(k){ return {name:k, value: map[k]}; }).sort(function(a,b){ return b.value - a.value; }).slice(0,8);
+    if(entries.length === 0){
+      el.innerHTML = '<div class="chart-empty">Sin datos todavía.</div>';
+      return;
+    }
+    var max = entries[0].value;
+    el.innerHTML = entries.map(function(e){
+      var pct = max > 0 ? (e.value/max)*100 : 0;
+      var match = allBookmakers.find(function(b){ return (b.name||"").trim().toLowerCase() === e.name.trim().toLowerCase(); });
+      var dot = match ? '<span class="bm-dot '+match.status+'" title="'+BOOKMAKER_STATUSES[match.status]+'"></span>' : '';
+      return '<div class="book-bar-row">' +
+        '<div class="book-bar-label" title="'+escapeHtml(e.name)+(match?" · "+BOOKMAKER_STATUSES[match.status]:"")+'">'+dot+escapeHtml(e.name)+'</div>' +
+        '<div class="book-bar-track"><div class="book-bar-fill" style="width:'+pct+'%"></div></div>' +
+        '<div class="book-bar-value num">'+fmtMoney(e.value)+'</div>' +
+      '</div>';
+    }).join("");
+  }
+
+  function renderBetsTable(){
+    var tbody = document.getElementById("betsTableBody");
+    var empty = document.getElementById("betsEmpty");
+    if(allBets.length === 0){
+      tbody.innerHTML = "";
+      empty.style.display = "block";
+      return;
+    }
+    empty.style.display = "none";
+
+    var typeLabels = {surebet:"Surebet", multi:"Multi", simple:"Simple"};
+
+    tbody.innerHTML = allBets.map(function(b){
+      var id = b.id || b._localId;
+      var books = b.legs.map(function(l){ return escapeHtml(l.bookmaker); }).join(", ");
+      var statusPill;
+      if(b.status === "pendiente"){
+        statusPill = '<span class="pill pending">Pendiente</span>';
+      } else if(b.status === "anulada"){
+        statusPill = '<span class="pill void">Anulada</span>';
+      } else {
+        statusPill = '<span class="pill '+((b.profit||0)>=0?"settled-pos":"settled-neg")+'">Liquidada</span>';
+      }
+      var resultCell = b.status === "pendiente" ? '<span class="type-tag">—</span>' :
+        '<span class="cell-num '+((b.profit||0)>=0?"metric-value pos":"metric-value neg")+'">'+fmtMoney(b.profit||0)+'</span>';
+
+      var settlePanel = "";
+      if(openSettlePanel === id && b.status === "pendiente"){
+        var legBtns = b.legs.map(function(l,i){
+          return '<button class="btn btn-sm" data-action="won" data-id="'+id+'" data-leg="'+i+'">Ganó '+escapeHtml(l.bookmaker)+' ('+escapeHtml(l.outcome)+')</button>';
+        }).join("");
+        settlePanel = '<tr><td colspan="8"><div class="settle-panel">' + legBtns +
+          '<button class="btn btn-sm" data-action="lost" data-id="'+id+'">Perdieron todas</button>' +
+          '<button class="btn btn-sm" data-action="void" data-id="'+id+'">Anular</button>' +
+          '<button class="btn btn-sm btn-ghost" data-action="cancel-settle" data-id="'+id+'">Cerrar</button>' +
+          '</div></td></tr>';
+      }
+
+      var actionsCell = b.status === "pendiente"
+        ? '<button class="btn btn-sm" data-action="toggle-settle" data-id="'+id+'">Liquidar</button> <button class="btn btn-sm btn-danger-ghost" data-action="delete" data-id="'+id+'">Borrar</button>'
+        : '<button class="btn btn-sm btn-danger-ghost" data-action="delete" data-id="'+id+'">Borrar</button>';
+
+      return '<tr>' +
+        '<td class="cell-num">'+escapeHtml(b.date)+'</td>' +
+        '<td>'+escapeHtml(b.event)+'</td>' +
+        '<td><span class="type-tag">'+(typeLabels[b.type]||b.type)+'</span></td>' +
+        '<td style="max-width:180px;">'+books+'</td>' +
+        '<td class="cell-num">'+fmtMoney(b.totalStake)+'</td>' +
+        '<td>'+statusPill+'</td>' +
+        '<td>'+resultCell+'</td>' +
+        '<td>'+actionsCell+'</td>' +
+      '</tr>' + settlePanel;
+    }).join("");
+  }
+
+  document.getElementById("betsTableBody").addEventListener("click", function(e){
+    var btn = e.target.closest("button[data-action]");
+    if(!btn) return;
+    var action = btn.dataset.action, id = btn.dataset.id;
+    if(action === "toggle-settle"){
+      openSettlePanel = openSettlePanel === id ? null : id;
+      renderBetsTable();
+    } else if(action === "cancel-settle"){
+      openSettlePanel = null;
+      renderBetsTable();
+    } else if(action === "won"){
+      openSettlePanel = null;
+      settleBet(id, "won", +btn.dataset.leg);
+    } else if(action === "lost"){
+      openSettlePanel = null;
+      settleBet(id, "lost", null);
+    } else if(action === "void"){
+      openSettlePanel = null;
+      settleBet(id, "void", null);
+    } else if(action === "delete"){
+      deleteBet(id);
+    }
+  });
+
+  // ---------- Init ----------
+  renderLegs();
+  compute();
+  renderLog();
+  renderBookmakers();
+  initSample();
+
+  var dbBannerEl = document.getElementById("dbBanner");
+  var storageModeHintEl = document.getElementById("storageModeHint");
+  var ARTIFACT_URL = "https://claude.ai/code/artifact/049c1f53-feea-408f-9d9e-c596f6b1f2a7";
+
+  function setLocalMode(){
+    allBets = loadLocalJSON(STORAGE_KEYS.bets, []);
+    allBookmakers = loadLocalJSON(STORAGE_KEYS.bookmakers, []);
+    renderLog();
+    renderBookmakers();
+    dbBannerEl.className = "db-banner info";
+    dbBannerEl.style.display = "block";
+    dbBannerEl.innerHTML = 'Modo local: tu historial se guarda en este navegador (localStorage). Usá "Exportar backup (JSON)" cada tanto para tener una copia — por ejemplo, en esta misma carpeta. Para sincronizar entre dispositivos y usar el análisis de fotos con IA, abrí la <a href="' + ARTIFACT_URL + '" target="_blank" rel="noopener">versión en la nube</a>.';
+    storageModeHintEl.textContent = "Guardado local (localStorage) — no compartido entre navegadores/dispositivos";
+  }
+
+  if(typeof claude !== "undefined" && claude && typeof claude.use === "function"){
+    claude.use("db").then(function(namespace){
+      if(!namespace){
+        setLocalMode();
+        return;
+      }
+      db = namespace;
+      storageModeHintEl.textContent = "Guardado en la nube";
+      db.collection("bets").orderBy("createdAt","desc").limit(500).onSnapshot(
+        function(snap){
+          allBets = snap.docs.map(function(d){
+            var data = d.data() || {};
+            data.id = d.id;
+            return data;
+          });
+          renderLog();
+        },
+        function(err){
+          dbBannerEl.className = "db-banner";
+          dbBannerEl.style.display = "block";
+          dbBannerEl.textContent = "Error de sincronización de apuestas: " + (err && err.message ? err.message : "desconocido");
+        }
+      );
+      db.collection("bookmakers").orderBy("createdAt","desc").limit(200).onSnapshot(
+        function(snap){
+          allBookmakers = snap.docs.map(function(d){
+            var data = d.data() || {};
+            data.id = d.id;
+            return data;
+          });
+          renderBookmakers();
+        },
+        function(err){
+          dbBannerEl.className = "db-banner";
+          dbBannerEl.style.display = "block";
+          dbBannerEl.textContent = "Error de sincronización de casas: " + (err && err.message ? err.message : "desconocido");
+        }
+      );
+    }).catch(function(){
+      setLocalMode();
+    });
+  } else {
+    setLocalMode();
+  }
+})();
+</script>
