@@ -383,6 +383,7 @@
           <div class="photo-controls">
             <input type="file" id="photoInput" accept="image/*" multiple hidden>
             <span class="photo-note">Tip: con esta pestaña abierta, pegá capturas directo con Ctrl+V (Cmd+V en Mac) — no hace falta guardarlas primero.</span>
+            <button class="btn btn-sm" id="captureScreenBtn">🖥️ Capturar pantalla</button>
             <button class="btn btn-sm btn-accent" id="analyzePhotoBtn" disabled>Analizar con Claude</button>
             <span class="photo-status" id="photoStatus"></span>
             <span class="photo-note">Cada análisis usa tu cuota de uso de Claude.</span>
@@ -976,6 +977,37 @@
   document.getElementById("photoInput").addEventListener("change", function(e){
     addPhotoFiles(e.target.files);
     e.target.value = "";
+  });
+
+  document.getElementById("captureScreenBtn").addEventListener("click", function(){
+    if(!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia){
+      toast("Tu navegador no admite compartir pantalla. Probá con Chrome o Edge, o subí la captura como archivo.");
+      return;
+    }
+    navigator.mediaDevices.getDisplayMedia({video: {frameRate: 1}}).then(function(stream){
+      var track = stream.getVideoTracks()[0];
+      var video = document.createElement("video");
+      video.srcObject = stream;
+      video.play();
+      video.addEventListener("loadedmetadata", function(){
+        setTimeout(function(){
+          var canvas = document.createElement("canvas");
+          canvas.width = video.videoWidth;
+          canvas.height = video.videoHeight;
+          canvas.getContext("2d").drawImage(video, 0, 0);
+          stream.getTracks().forEach(function(t){ t.stop(); });
+          canvas.toBlob(function(blob){
+            if(!blob){ toast("No se pudo capturar la pantalla."); return; }
+            var file = new File([blob], "captura-pantalla.png", {type: "image/png"});
+            addPhotoFiles([file]);
+            toast("Captura agregada");
+          }, "image/png");
+        }, 150);
+      });
+    }).catch(function(err){
+      if(err && err.name === "NotAllowedError") return;
+      toast("No se pudo capturar la pantalla: " + (err && err.message ? err.message : "error"));
+    });
   });
 
   document.addEventListener("paste", function(e){
