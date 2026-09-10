@@ -271,6 +271,13 @@
   .cal-day-profit.neg{ color:var(--danger); }
   @media (max-width:600px){ .cal-cell{ min-height:44px; padding:4px 5px; } .cal-day-profit{ font-size:10px; } }
 
+  .onboarding-card{ border-color:var(--accent); background:var(--accent-soft); }
+  .onboarding-head{ display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:4px; }
+  .onboarding-head .card-title{ margin:0; color:var(--accent-strong); }
+  .onboarding-steps{ margin:10px 0 0; padding-left:20px; display:flex; flex-direction:column; gap:8px; }
+  .onboarding-steps li{ font-size:13px; color:var(--text-primary); line-height:1.5; }
+  .onboarding-steps strong{ color:var(--accent-strong); }
+
   .db-banner{ background:var(--accent-soft); color:var(--accent-strong); border:1px solid var(--accent); font-size:12.5px; padding:8px 12px; border-radius:9px; margin-bottom:14px; }
   .db-banner a{ color:inherit; font-weight:600; }
   .db-banner.info{ background:var(--success-soft); color:var(--success); border-color:var(--success); }
@@ -350,6 +357,22 @@
 
   <!-- CALCULADORA -->
   <section id="tab-calc" class="tab-panel active">
+    <div class="card onboarding-card" id="onboardingCard">
+      <div class="onboarding-head">
+        <h2 class="card-title" style="font-size:17px;">Primeros pasos (si es tu primera surebet)</h2>
+        <button class="btn btn-sm btn-ghost" id="onboardingCloseBtn" title="Ocultar (podés volver a abrirlo desde el link de abajo)">Ocultar</button>
+      </div>
+      <ol class="onboarding-steps">
+        <li><strong>Registrate y cargá saldo</strong> en al menos 2 casas de apuestas distintas. Anotalas en la pestaña "Casas" para llevar el control.</li>
+        <li><strong>Buscá una oportunidad</strong>: subí una captura de Betburger en "Cargar desde capturas" (abajo), o cargá las cuotas a mano en la calculadora.</li>
+        <li><strong>Revisá el resultado</strong>: si dice "SUREBET" y la ganancia da positiva, hay arbitraje. Si dice "No es surebet", no apuestes con esas cuotas.</li>
+        <li><strong>Anotá los montos</strong> que te indica la tabla (uno por casa) y cargalos <strong>ya</strong> en cada casa, antes de que la cuota cambie.</li>
+        <li><strong>Guardá la apuesta</strong> en el registro, y cuando termine el evento, liquidala (pestaña Registro) para que tu ganancia real quede contada.</li>
+      </ol>
+      <p class="card-hint" style="margin:8px 0 0;">¿Un término no te queda claro? Bajá hasta "Glosario rápido de términos" en la calculadora.</p>
+    </div>
+    <div class="type-tag" id="onboardingReopenLink" style="display:none; margin:-6px 0 16px; cursor:pointer;">↺ Mostrar de nuevo la guía de primeros pasos</div>
+
     <div class="card photo-card" id="photoCard">
       <h2 class="card-title" style="font-size:17px;">Cargar desde capturas (BetBurger y similares)</h2>
       <p class="card-hint">Pegá (Ctrl+V) o subí una o varias capturas de una app de comparación de cuotas. Claude identifica cada oportunidad, arma las cuotas y te explica cómo ejecutarla — siempre revisá los datos antes de guardar.</p>
@@ -436,6 +459,7 @@
           <p><strong>Cuota (odds):</strong> el número que multiplica tu apuesta si ganás. Cuota 2.00 apostando $10.000 te paga $20.000 si ganás (tu plata + $10.000 de ganancia).</p>
           <p><strong>Favorito / no favorito (underdog):</strong> el que se espera que gane tiene cuota más baja (favorito); el que se espera que pierda tiene cuota más alta (no favorito).</p>
           <p><strong>Margen / recargo (overround) / vig:</strong> la "comisión" que cobran las casas metida adentro de las cuotas — tres nombres para lo mismo. Cuando el margen te da negativo (suma de probabilidades implícitas &lt; 1) es a tu favor: eso es la surebet.</p>
+          <p><strong>Medio (middle):</strong> parecido a una surebet pero distinto — apostás dos líneas que no se solapan del todo (ej: Over 2.5 en una casa y Under 3.5 en otra), de forma que si el resultado cae justo en el medio (3 goles) ganás las DOS apuestas, pero si cae afuera podés perder ambas. No es lo mismo que la cobertura garantizada que calcula esta app — tiene más riesgo.</p>
           <p><strong>Saldo:</strong> la plata que tenés disponible en la cuenta de una casa en un momento dado — se ajusta con depósitos, retiros y lo que ganás o perdés.</p>
           <p><strong>Stake:</strong> el monto que apostás en cada casa.</p>
           <p><strong>TO(2.5) / TU(2.5) (Total Over/Under):</strong> apostás a si el total de goles o puntos del partido termina por ENCIMA (Over) o por DEBAJO (Under) del número indicado.</p>
@@ -575,6 +599,26 @@
       setTimeout(function(){ el.remove(); }, 220);
     }, 2800);
   }
+
+  // ---------- Onboarding card (dismiss/reopen, remembered per browser) ----------
+  var ONBOARDING_KEY = "surebet-tracker:onboarding-dismissed";
+  function setOnboardingVisible(visible){
+    document.getElementById("onboardingCard").style.display = visible ? "block" : "none";
+    document.getElementById("onboardingReopenLink").style.display = visible ? "none" : "block";
+  }
+  (function initOnboarding(){
+    var dismissed = false;
+    try{ dismissed = localStorage.getItem(ONBOARDING_KEY) === "1"; }catch(e){}
+    setOnboardingVisible(!dismissed);
+  })();
+  document.getElementById("onboardingCloseBtn").addEventListener("click", function(){
+    setOnboardingVisible(false);
+    try{ localStorage.setItem(ONBOARDING_KEY, "1"); }catch(e){}
+  });
+  document.getElementById("onboardingReopenLink").addEventListener("click", function(){
+    setOnboardingVisible(true);
+    try{ localStorage.removeItem(ONBOARDING_KEY); }catch(e){}
+  });
 
   // ---------- Tabs ----------
   document.querySelectorAll(".tab-btn").forEach(function(btn){
