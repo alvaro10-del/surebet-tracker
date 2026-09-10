@@ -419,6 +419,19 @@
           <p>Si esa suma es <strong>menor a 1</strong>, existe una surebet: repartiendo el monto total en proporción a <code>(1/cuota) / Σ</code> en cada casa, ganás lo mismo sin importar el resultado. La ganancia garantizada es <code>(1 − Σ) / Σ</code> sobre el monto invertido.</p>
           <p>Si la suma es <strong>mayor a 1</strong>, ese margen es el recargo (overround) de las casas de apuestas y no hay arbitraje posible con esas cuotas.</p>
         </details>
+
+        <details class="help">
+          <summary>Glosario rápido de términos</summary>
+          <p><strong>Cobertura:</strong> apostar a todos los resultados posibles de un mismo mercado (repartidos en distintas casas) para que, pase lo que pase, cobres en alguna.</p>
+          <p><strong>Margen / recargo (overround):</strong> la "comisión" que cobran las casas metida adentro de las cuotas. Cuando el margen es negativo (suma de probabilidades &lt; 1) es a tu favor: eso es la surebet.</p>
+          <p><strong>1X2:</strong> mercado de fútbol con 3 resultados — 1 gana el local, X empate, 2 gana el visitante.</p>
+          <p><strong>TO(2.5) / TU(2.5):</strong> Total Over/Under — apostás a si el total de goles o puntos del partido termina por ENCIMA (Over) o por DEBAJO (Under) del número indicado.</p>
+          <p><strong>AH1(-1.75) / AH2(+1.75):</strong> hándicap asiático — le suman o restan goles/puntos a un equipo antes de definir el ganador, y eliminan el empate como resultado posible. AH1 es la ventaja/desventaja del equipo 1, AH2 la del equipo 2 (siempre son números opuestos).</p>
+          <p><strong>BTTS:</strong> "Both Teams To Score" — ambos equipos anotan al menos un gol, sí o no.</p>
+          <p><strong>Comisión (exchange):</strong> en casas tipo Betfair, no te cobran metiéndolo en la cuota sino aparte, como % de lo que ganás. Por eso el campo "Com. %" en la calculadora.</p>
+          <p><strong>Stake:</strong> el monto que apostás en cada casa.</p>
+          <p><strong>Liquidar:</strong> registrar el resultado final de una apuesta ya jugada (quién ganó) para que quede en tu historial y ganancia real.</p>
+        </details>
       </div>
 
       <div class="card result-card">
@@ -1051,16 +1064,21 @@
       "escribí el nombre completo en \"market\"), la lista de casas con su cuota decimal, y si la herramienta muestra un % de " +
       "ganancia/ROI para esa fila (como \"0,99%\" a la izquierda) devolvelo en \"displayedPct\" como número (0.99), o null si no " +
       "se ve ninguno.\n" +
-      "3. Escribí una explicación EJECUTABLE, tipo instructivo paso a paso, dirigida a alguien que va a hacer la apuesta ahora " +
-      "mismo con eso abierto en la pantalla — no una clase teórica. Estructura sugerida: (a) si la notación del mercado no es " +
-      "obvia, explicala en una frase; (b) el cálculo con los números REALES de la imagen (probabilidad implícita de cada " +
-      "resultado, la suma, el margen o recargo resultante) — si hay displayedPct, compará tu margen calculado contra ese número " +
-      "y avisá si no coinciden; (c) la instrucción concreta de qué anotar/hacer, en el formato: \"Entrá a {casa1}, buscá {mercado}, " +
-      "apostá ${monto1} a {resultado1} a cuota {cuota1}. Entrá a {casa2}, apostá ${monto2} a {resultado2} a cuota {cuota2}.\" " +
-      "usando un capital de ejemplo de 200.000 pesos colombianos (COP) repartido según la fórmula — todos los montos en COP, sin " +
-      "decimales; (d) un riesgo concreto a vigilar antes de " +
-      "confirmar (la cuota puede moverse, hace falta saldo previo cargado en cada casa). No expliques qué es una surebet en " +
-      "términos generales, andá directo al caso concreto.\n\n" +
+      "3. Escribí una explicación EJECUTABLE para alguien que recién está aprendiendo a hacer arbitraje deportivo — no sabe qué " +
+      "significan términos como \"cobertura\", \"margen\", \"hándicap asiático\" o \"probabilidad implícita\" salvo que se los " +
+      "expliques ahí mismo, en la misma explicación, con palabras simples y un ejemplo concreto (no en una frase aparte ni dando " +
+      "por sabido nada). Estructura obligatoria, siempre en este orden: " +
+      "(a) UNA frase diciendo qué significa el mercado en criollo (ej: \"esto cubre los dos resultados posibles del total de goles: " +
+      "que sean 3 o más, o que sean 2 o menos\" — nunca dejes la notación TO/TU/AH1/AH2/1X2 sin traducir a palabras); " +
+      "(b) el cálculo con los números REALES de la imagen, mostrando cada paso (probabilidad implícita de cada resultado = 1÷cuota; " +
+      "la suma de esas dos probabilidades; si da menos de 1 hay ganancia asegurada, si da más de 1 no hay arbitraje) — si hay " +
+      "displayedPct, compará tu margen calculado contra ese número y avisá si no coinciden; " +
+      "(c) la instrucción concreta de qué anotar/hacer, literal en este formato: \"Entrá a {casa1}, buscá {mercado}, apostá " +
+      "${monto1} a {resultado1} a cuota {cuota1}. Entrá a {casa2}, apostá ${monto2} a {resultado2} a cuota {cuota2}.\" usando un " +
+      "capital de ejemplo de 200.000 pesos colombianos (COP) repartido según la fórmula — todos los montos en COP, sin decimales; " +
+      "(d) un riesgo concreto a vigilar antes de confirmar, explicado en una frase de por qué importa (ej: \"la cuota puede bajar " +
+      "en los segundos que tardás en pasar de una casa a la otra — si eso pasa, no confirmes la segunda apuesta con una cuota peor, " +
+      "recalculá antes\"). Nunca uses una palabra técnica sin explicarla la primera vez que aparece en el texto.\n\n" +
       "Respondé con SOLO un JSON con esta forma exacta, sin texto adicional:\n" +
       '{"opportunities": [{"event": "string", "market": "string", "displayedPct": 0.99, "live": false, "legs": [{"bookmaker": "string", "outcome": "string", "odds": 2.05}], "explanation": "string"}], "notes": "string opcional, solo si algo no se pudo leer bien"}\n\n' +
       "Las cuotas deben ser números decimales, nunca fraccionarias ni americanas. Si no encontrás ninguna oportunidad clara, " +
