@@ -1028,12 +1028,14 @@
     lastOpportunities = opportunities;
     var el = document.getElementById("photoResults");
     var html = "";
-    if(notes){
-      html += '<div class="photo-note-block">' + escapeHtml(notes) + '</div>';
-    }
     if(opportunities.length === 0){
+      html += '<div class="badge no" style="margin-bottom:10px;">❌ NO ES SUREBET</div>';
+      html += '<div class="photo-note-block">' + (notes ? escapeHtml(notes) : "No pude confirmar arbitraje real con estas capturas.") + '</div>';
       el.innerHTML = html;
       return;
+    }
+    if(notes){
+      html += '<div class="photo-note-block">' + escapeHtml(notes) + '</div>';
     }
     html += opportunities.map(function(opp, i){
       var stats = analyzeLegsStats(opp.legs);
