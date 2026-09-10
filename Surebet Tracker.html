@@ -1133,8 +1133,13 @@
       "recalculá antes\"). Nunca uses una palabra técnica sin explicarla la primera vez que aparece en el texto.\n\n" +
       "Respondé con SOLO un JSON con esta forma exacta, sin texto adicional:\n" +
       '{"opportunities": [{"event": "string", "market": "string", "displayedPct": 0.99, "live": false, "legs": [{"bookmaker": "string", "outcome": "string", "odds": 2.05}], "explanation": "string"}], "notes": "string opcional, solo si algo no se pudo leer bien"}\n\n' +
-      "Las cuotas deben ser números decimales, nunca fraccionarias ni americanas. Si no encontrás ninguna oportunidad clara, " +
-      'devolvé "opportunities": [] y explicá por qué en "notes".';
+      "Las cuotas deben ser números decimales, nunca fraccionarias ni americanas. Si NINGUNA combinación de cuotas de la imagen da " +
+      "arbitraje real (suma de probabilidades implícitas menor a 1 en algún mercado), devolvé \"opportunities\": [] — pero en " +
+      "\"notes\" no te quedes solo en el motivo: mostrá igual, con la MEJOR combinación que encontraste (la que dio la suma más " +
+      "cercana a 1), el mismo tipo de instrucción concreta de la sección 3(c) — \"Entrá a {casa1}, apostá a {resultado1} a cuota " +
+      "{cuota1}. Entrá a {casa2}, apostá a {resultado2} a cuota {cuota2}.\" — para que quien pregunta vea CÓMO se ejecutaría una " +
+      "apuesta así, aunque empecés esa parte con una advertencia bien clara de que esta combinación en particular NO es rentable " +
+      "y en promedio se pierde plata haciéndola, así no la confunde con una recomendación.";
 
     var task = activeProvider === "claude"
       ? sampleFn.json(prompt, {images: selectedPhotoFiles})
