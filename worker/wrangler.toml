@@ -9,6 +9,10 @@ ALLOWED_ORIGIN = "https://alvaro10-del.github.io"
 binding = "RATE_LIMIT_KV"
 id = "1be4bbdfdf7f4898be46916c3a6ca3e8"
 
+[[kv_namespaces]]
+binding = "TEAM_DATA"
+id = "6dee380002f44949b7ce27104d4aff27"
+
 # Secrets (never stored in this file — set with `wrangler secret put`):
 #   ANTHROPIC_API_KEY
 #   APP_SECRET

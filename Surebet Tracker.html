@@ -342,6 +342,7 @@
       <button class="tab-btn active" data-tab="calc">Calculadora</button>
       <button class="tab-btn" data-tab="log">Registro &amp; P&amp;L</button>
       <button class="tab-btn" data-tab="books">Casas</button>
+      <button class="tab-btn" data-tab="team">Equipo</button>
     </nav>
   </div>
 
@@ -411,8 +412,11 @@
 
         <div id="legsContainer" class="legs"></div>
 
-        <div class="actions-row" style="margin-bottom:14px;">
-          <button class="btn btn-sm" id="addLegBtn">+ Agregar resultado</button>
+        <div class="actions-row" style="margin-bottom:14px; flex-wrap:wrap; gap:8px;">
+          <span style="display:flex; gap:8px; flex-wrap:wrap;">
+            <button class="btn btn-sm" id="addLegBtn">+ Agregar resultado</button>
+            <button class="btn btn-sm" id="template1x2Btn" title="Arma las 3 filas del mercado de resultado del partido, para no mezclarlo por error con otro mercado">Plantilla 1X2</button>
+          </span>
           <span class="type-tag" id="legsHint"></span>
         </div>
 
@@ -555,6 +559,56 @@
       <div id="bookmakersEmpty" class="empty-state" style="display:none;">
         <div class="display">Todavía no agregaste casas</div>
         <div>Sumá las casas donde tenés cuenta para llevar el estado de cada una.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- EQUIPO -->
+  <section id="tab-team" class="tab-panel">
+    <div class="card">
+      <h3 class="card-title" style="font-size:17px;">Trabajar en equipo</h3>
+      <p class="card-hint">Ingresá el mismo código de equipo en el navegador de cada persona para ver las mismas apuestas, casas y socios. No hace falta si vas a usar la herramienta vos solo.</p>
+      <div id="teamDisconnected" class="field-row" style="align-items:flex-end;">
+        <div class="field">
+          <label for="teamCodeInput">Código de equipo</label>
+          <input type="text" id="teamCodeInput" placeholder="Ej: peraspera">
+        </div>
+        <div class="field">
+          <label for="authorNameInput">Tu nombre</label>
+          <input type="text" id="authorNameInput" placeholder="Ej: Alvaro">
+        </div>
+        <button class="btn btn-accent" id="teamConnectBtn" style="flex:0 0 auto;">Conectar</button>
+      </div>
+      <div id="teamConnected" style="display:none;">
+        <div class="actions-row">
+          <span class="type-tag" id="teamStatus"></span>
+          <span style="display:flex; gap:8px;">
+            <button class="btn btn-sm" id="teamRefreshBtn">🔄 Actualizar ahora</button>
+            <button class="btn btn-sm btn-danger-ghost" id="teamDisconnectBtn">Salir del equipo</button>
+          </span>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3 class="card-title" style="font-size:17px;">Socios y capital aportado</h3>
+      <p class="card-hint">Cuánto puso cada uno — sirve para repartir ganancias proporcional al capital de cada socio.</p>
+      <div class="toolbar-row">
+        <button class="btn btn-sm btn-accent" id="addPartnerBtn">+ Agregar socio</button>
+        <div class="toolbar-spacer"></div>
+        <span class="toolbar-hint" id="partnersTotalHint"></span>
+      </div>
+      <div class="table-wrap">
+        <table id="partnersTable">
+          <thead>
+            <tr><th>Socio</th><th>Capital aportado</th><th>% del total</th><th>Notas</th><th></th></tr>
+          </thead>
+          <tbody id="partnersTableBody"></tbody>
+        </table>
+      </div>
+      <div id="partnersEmpty" class="empty-state" style="display:none;">
+        <div class="display">Todavía no agregaste socios</div>
+        <div>Sumá a cada persona que puso capital para este arbitraje.</div>
       </div>
     </div>
   </section>
@@ -713,6 +767,19 @@
     legs.push({bookmaker:"", outcome:"", odds:0, commissionPct:0});
     renderLegs();
     compute();
+  });
+
+  document.getElementById("template1x2Btn").addEventListener("click", function(){
+    var hasData = legs.some(function(l){ return l.bookmaker.trim() || l.odds > 1; });
+    if(hasData && !confirm("Esto reemplaza los resultados actuales por las 3 filas del mercado 1X2 (Local/Empate/Visitante). ¿Continuar?")) return;
+    legs = [
+      {bookmaker:"", outcome:"Gana Local", odds:0, commissionPct:0},
+      {bookmaker:"", outcome:"Empate", odds:0, commissionPct:0},
+      {bookmaker:"", outcome:"Gana Visitante", odds:0, commissionPct:0}
+    ];
+    renderLegs();
+    compute();
+    toast("Completá la casa y la cuota de cada resultado — las 3 tienen que ser del mismo mercado (resultado del partido).");
   });
 
   function currentTotalStake(){
@@ -1221,10 +1288,17 @@
   });
 
   // ---------- Storage (cloud db, or localStorage when running outside the artifact viewer) ----------
-  var STORAGE_KEYS = { bets: "surebet-tracker:bets", bookmakers: "surebet-tracker:bookmakers" };
+  var STORAGE_KEYS = { bets: "surebet-tracker:bets", bookmakers: "surebet-tracker:bookmakers", partners: "surebet-tracker:partners" };
+  var TEAM_CODE_KEY = "surebet-tracker:team-code";
+  var AUTHOR_NAME_KEY = "surebet-tracker:author-name";
   var db = null;
+  var teamCode = null;
+  var authorName = "";
+  try{ authorName = localStorage.getItem(AUTHOR_NAME_KEY) || ""; }catch(e){}
+  var teamPollTimer = null;
   var allBets = [];
   var allBookmakers = [];
+  var allPartners = [];
 
   function loadLocalJSON(key, fallback){
     try{
@@ -1235,8 +1309,87 @@
   function saveLocalJSON(key, value){
     try{ localStorage.setItem(key, JSON.stringify(value)); }catch(e){ /* storage full or unavailable */ }
   }
-  function persistLocalBets(){ saveLocalJSON(STORAGE_KEYS.bets, allBets); }
-  function persistLocalBookmakers(){ saveLocalJSON(STORAGE_KEYS.bookmakers, allBookmakers); }
+  // Re-reads the latest value from localStorage right before writing, instead of trusting
+  // the in-memory copy — avoids one tab silently wiping out a save made in another tab/device
+  // in the meantime (the bug behind a bet that "se olvidó registrar").
+  function withLocalBets(mutator){
+    var fresh = loadLocalJSON(STORAGE_KEYS.bets, []);
+    var result = mutator(fresh);
+    var finalArr = Array.isArray(result) ? result : fresh;
+    saveLocalJSON(STORAGE_KEYS.bets, finalArr);
+    allBets = finalArr;
+  }
+  function withLocalBookmakers(mutator){
+    var fresh = loadLocalJSON(STORAGE_KEYS.bookmakers, []);
+    var result = mutator(fresh);
+    var finalArr = Array.isArray(result) ? result : fresh;
+    saveLocalJSON(STORAGE_KEYS.bookmakers, finalArr);
+    allBookmakers = finalArr;
+  }
+  function withLocalPartners(mutator){
+    var fresh = loadLocalJSON(STORAGE_KEYS.partners, []);
+    var result = mutator(fresh);
+    var finalArr = Array.isArray(result) ? result : fresh;
+    saveLocalJSON(STORAGE_KEYS.partners, finalArr);
+    allPartners = finalArr;
+  }
+
+  // ---------- Team storage (shared, via the Worker + a team code) ----------
+  function teamFetch(collection, method, id, body){
+    var url = EXTERNAL_AI_CONFIG.workerUrl + "/team/" + collection + (id ? ("/" + id) : "");
+    var opts = {
+      method: method,
+      headers: Object.assign({"Content-Type": "application/json"}, teamCode ? {"X-Team-Code": teamCode} : {})
+    };
+    if(method !== "GET") opts.body = JSON.stringify(body || {});
+    return fetch(url, opts).then(function(resp){
+      return resp.json().catch(function(){ return {}; }).then(function(data){
+        if(!resp.ok){
+          var err = new Error(data.error || ("HTTP " + resp.status));
+          err.code = data.error || "upstream_error";
+          throw err;
+        }
+        return data;
+      });
+    });
+  }
+
+  function refreshTeamData(){
+    if(!teamCode) return;
+    teamFetch("bets", "GET").then(function(data){ allBets = data.items || []; renderLog(); })
+      .catch(function(err){ console.log("team bets fetch failed", err); });
+    teamFetch("bookmakers", "GET").then(function(data){ allBookmakers = data.items || []; renderBookmakers(); })
+      .catch(function(err){ console.log("team bookmakers fetch failed", err); });
+    teamFetch("partners", "GET").then(function(data){ allPartners = data.items || []; renderPartners(); })
+      .catch(function(err){ console.log("team partners fetch failed", err); });
+  }
+
+  function startTeamPolling(){
+    if(teamPollTimer) clearInterval(teamPollTimer);
+    teamPollTimer = setInterval(function(){
+      if(document.visibilityState === "visible") refreshTeamData();
+    }, 25000);
+  }
+
+  function connectTeam(code){
+    teamCode = code;
+    try{ localStorage.setItem(TEAM_CODE_KEY, code); }catch(e){}
+    setTeamStatus("Conectado al equipo — sincronizando…");
+    refreshTeamData();
+    startTeamPolling();
+  }
+  function disconnectTeam(){
+    teamCode = null;
+    try{ localStorage.removeItem(TEAM_CODE_KEY); }catch(e){}
+    if(teamPollTimer){ clearInterval(teamPollTimer); teamPollTimer = null; }
+    allBets = []; allBookmakers = []; allPartners = [];
+    setTeamStatus("");
+    renderLog(); renderBookmakers(); renderPartners();
+  }
+  function setTeamStatus(msg){
+    var el = document.getElementById("teamStatus");
+    if(el) el.textContent = msg;
+  }
 
   function betsCollection(){ return db.collection("bets"); }
 
@@ -1260,6 +1413,7 @@
       status: "pendiente",
       profit: null,
       settledLegIndex: null,
+      author: authorName || "",
       createdAt: Date.now()
     };
 
@@ -1270,10 +1424,17 @@
       }).catch(function(err){
         toast("No se pudo guardar: " + (err && err.message ? err.message : "error"));
       });
+    } else if(teamCode){
+      teamFetch("bets", "POST", null, {data: record}).then(function(){
+        toast("Apuesta guardada para el equipo");
+        document.getElementById("betNotes").value = "";
+        refreshTeamData();
+      }).catch(function(err){
+        toast("No se pudo guardar: " + (err && err.message ? err.message : "error"));
+      });
     } else {
       record._localId = uid();
-      allBets.unshift(record);
-      persistLocalBets();
+      withLocalBets(function(arr){ arr.unshift(record); });
       renderLog();
       document.getElementById("betNotes").value = "";
       toast("Apuesta guardada en este navegador");
@@ -1302,24 +1463,44 @@
 
   function applyBalanceDeltas(deltas){
     var changes = [];
-    Object.keys(deltas).forEach(function(key){
-      var d = deltas[key];
-      var bm = findBookmakerByName(d.name);
-      if(!bm) return;
-      var newBalance = (bm.balance || 0) + d.delta;
-      changes.push(bm.name + " " + (d.delta >= 0 ? "+" : "") + fmtMoneyShort(d.delta));
-      if(db && bm.id){
+    if(db){
+      Object.keys(deltas).forEach(function(key){
+        var d = deltas[key];
+        var bm = findBookmakerByName(d.name);
+        if(!bm) return;
+        var newBalance = (bm.balance || 0) + d.delta;
+        changes.push(bm.name + " " + (d.delta >= 0 ? "+" : "") + fmtMoneyShort(d.delta));
         db.doc("bookmakers/" + bm.id).update({balance: newBalance}).catch(function(err){
           toast("No se pudo actualizar el saldo de " + bm.name + ": " + (err && err.message ? err.message : "error"));
         });
-      } else {
-        bm.balance = newBalance;
-      }
-    });
-    if(!db && changes.length){
-      persistLocalBookmakers();
-      renderBookmakers();
+      });
+      return changes;
     }
+    if(teamCode){
+      Object.keys(deltas).forEach(function(key){
+        var d = deltas[key];
+        var nameKey = (d.name || "").trim().toLowerCase();
+        var bm = allBookmakers.find(function(b){ return (b.name || "").trim().toLowerCase() === nameKey; });
+        if(!bm) return;
+        changes.push(bm.name + " " + (d.delta >= 0 ? "+" : "") + fmtMoneyShort(d.delta));
+        teamFetch("bookmakers", "PUT", bm.id, {inc: {balance: d.delta}}).catch(function(err){
+          toast("No se pudo actualizar el saldo de " + bm.name + ": " + (err && err.message ? err.message : "error"));
+        });
+      });
+      if(changes.length) refreshTeamData();
+      return changes;
+    }
+    withLocalBookmakers(function(arr){
+      Object.keys(deltas).forEach(function(key){
+        var d = deltas[key];
+        var nameKey = (d.name || "").trim().toLowerCase();
+        var bm = arr.find(function(b){ return (b.name || "").trim().toLowerCase() === nameKey; });
+        if(!bm) return;
+        bm.balance = (bm.balance || 0) + d.delta;
+        changes.push(bm.name + " " + (d.delta >= 0 ? "+" : "") + fmtMoneyShort(d.delta));
+      });
+    });
+    if(changes.length) renderBookmakers();
     return changes;
   }
 
@@ -1350,12 +1531,27 @@
       }).catch(function(err){
         toast("No se pudo liquidar: " + (err && err.message ? err.message : "error"));
       });
+    } else if(teamCode){
+      teamFetch("bets", "PUT", bet.id, {patch: {
+        status: status,
+        profit: profit,
+        settledLegIndex: kind === "won" ? legIndex : null,
+        settledAt: Date.now()
+      }}).then(function(){
+        toast("Apuesta liquidada" + balanceNote);
+        refreshTeamData();
+      }).catch(function(err){
+        toast("No se pudo liquidar: " + (err && err.message ? err.message : "error"));
+      });
     } else {
-      bet.status = status;
-      bet.profit = profit;
-      bet.settledLegIndex = kind === "won" ? legIndex : null;
-      bet.settledAt = Date.now();
-      persistLocalBets();
+      withLocalBets(function(arr){
+        var b = arr.find(function(x){ return (x.id || x._localId) === betId; });
+        if(!b) return;
+        b.status = status;
+        b.profit = profit;
+        b.settledLegIndex = kind === "won" ? legIndex : null;
+        b.settledAt = Date.now();
+      });
       renderLog();
       toast("Apuesta liquidada" + balanceNote);
     }
@@ -1371,9 +1567,15 @@
       }).catch(function(err){
         toast("No se pudo eliminar: " + (err && err.message ? err.message : "error"));
       });
+    } else if(teamCode){
+      teamFetch("bets", "DELETE", bet.id).then(function(){
+        toast("Apuesta eliminada");
+        refreshTeamData();
+      }).catch(function(err){
+        toast("No se pudo eliminar: " + (err && err.message ? err.message : "error"));
+      });
     } else {
-      allBets = allBets.filter(function(b){ return (b.id || b._localId) !== betId; });
-      persistLocalBets();
+      withLocalBets(function(arr){ return arr.filter(function(b){ return (b.id || b._localId) !== betId; }); });
       renderLog();
       toast("Apuesta eliminada");
     }
@@ -1388,26 +1590,36 @@
       db.collection("bookmakers").add(rec).catch(function(err){
         toast("No se pudo agregar la casa: " + (err && err.message ? err.message : "error"));
       });
+    } else if(teamCode){
+      teamFetch("bookmakers", "POST", null, {data: rec}).then(function(){ refreshTeamData(); }).catch(function(err){
+        toast("No se pudo agregar la casa: " + (err && err.message ? err.message : "error"));
+      });
     } else {
       rec._localId = uid();
-      allBookmakers.unshift(rec);
-      persistLocalBookmakers();
+      withLocalBookmakers(function(arr){ arr.unshift(rec); });
       renderBookmakers();
     }
   }
   document.getElementById("addBookmakerBtn").addEventListener("click", addBookmakerRow);
 
   function commitBookmakerField(id, field, value){
-    var bm = allBookmakers.find(function(b){ return (b.id || b._localId) === id; });
-    if(!bm) return;
-    bm[field] = value;
-    if(db && bm.id){
+    if(db){
+      var bm = allBookmakers.find(function(b){ return (b.id || b._localId) === id; });
+      if(!bm) return;
       var patch = {}; patch[field] = value;
       db.doc("bookmakers/" + bm.id).update(patch).catch(function(err){
         toast("No se pudo guardar: " + (err && err.message ? err.message : "error"));
       });
+    } else if(teamCode){
+      var patch2 = {}; patch2[field] = value;
+      teamFetch("bookmakers", "PUT", id, {patch: patch2}).catch(function(err){
+        toast("No se pudo guardar: " + (err && err.message ? err.message : "error"));
+      });
     } else {
-      persistLocalBookmakers();
+      withLocalBookmakers(function(arr){
+        var b = arr.find(function(x){ return (x.id || x._localId) === id; });
+        if(b) b[field] = value;
+      });
     }
   }
 
@@ -1419,9 +1631,12 @@
       db.doc("bookmakers/" + bm.id).delete().catch(function(err){
         toast("No se pudo eliminar: " + (err && err.message ? err.message : "error"));
       });
+    } else if(teamCode){
+      teamFetch("bookmakers", "DELETE", id).then(function(){ refreshTeamData(); }).catch(function(err){
+        toast("No se pudo eliminar: " + (err && err.message ? err.message : "error"));
+      });
     } else {
-      allBookmakers = allBookmakers.filter(function(b){ return (b.id || b._localId) !== id; });
-      persistLocalBookmakers();
+      withLocalBookmakers(function(arr){ return arr.filter(function(b){ return (b.id || b._localId) !== id; }); });
       renderBookmakers();
     }
   }
@@ -1477,6 +1692,143 @@
     var btn = e.target.closest("[data-action='delete-bookmaker']");
     if(!btn) return;
     removeBookmaker(btn.dataset.id);
+  });
+
+  // ---------- Partners (Socios) ----------
+  function addPartnerRow(){
+    var rec = {name:"", capitalContributed:0, notes:"", createdAt: Date.now()};
+    if(db){
+      db.collection("partners").add(rec).catch(function(err){
+        toast("No se pudo agregar el socio: " + (err && err.message ? err.message : "error"));
+      });
+    } else if(teamCode){
+      teamFetch("partners", "POST", null, {data: rec}).then(function(){ refreshTeamData(); }).catch(function(err){
+        toast("No se pudo agregar el socio: " + (err && err.message ? err.message : "error"));
+      });
+    } else {
+      rec._localId = uid();
+      withLocalPartners(function(arr){ arr.unshift(rec); });
+      renderPartners();
+    }
+  }
+  document.getElementById("addPartnerBtn").addEventListener("click", addPartnerRow);
+
+  function commitPartnerField(id, field, value){
+    if(db){
+      var p = allPartners.find(function(x){ return (x.id || x._localId) === id; });
+      if(!p) return;
+      var patch = {}; patch[field] = value;
+      db.doc("partners/" + p.id).update(patch).catch(function(err){
+        toast("No se pudo guardar: " + (err && err.message ? err.message : "error"));
+      });
+    } else if(teamCode){
+      var patch2 = {}; patch2[field] = value;
+      teamFetch("partners", "PUT", id, {patch: patch2}).catch(function(err){
+        toast("No se pudo guardar: " + (err && err.message ? err.message : "error"));
+      });
+    } else {
+      withLocalPartners(function(arr){
+        var p2 = arr.find(function(x){ return (x.id || x._localId) === id; });
+        if(p2) p2[field] = value;
+      });
+    }
+  }
+
+  function removePartner(id){
+    if(!confirm("¿Eliminar este socio de la lista?")) return;
+    var p = allPartners.find(function(x){ return (x.id || x._localId) === id; });
+    if(!p) return;
+    if(db && p.id){
+      db.doc("partners/" + p.id).delete().catch(function(err){
+        toast("No se pudo eliminar: " + (err && err.message ? err.message : "error"));
+      });
+    } else if(teamCode){
+      teamFetch("partners", "DELETE", id).then(function(){ refreshTeamData(); }).catch(function(err){
+        toast("No se pudo eliminar: " + (err && err.message ? err.message : "error"));
+      });
+    } else {
+      withLocalPartners(function(arr){ return arr.filter(function(x){ return (x.id || x._localId) !== id; }); });
+      renderPartners();
+    }
+  }
+
+  function renderPartners(){
+    var tbody = document.getElementById("partnersTableBody");
+    var empty = document.getElementById("partnersEmpty");
+    var hint = document.getElementById("partnersTotalHint");
+    if(allPartners.length === 0){
+      tbody.innerHTML = "";
+      empty.style.display = "block";
+      if(hint) hint.textContent = "";
+      return;
+    }
+    empty.style.display = "none";
+    var total = allPartners.reduce(function(s,p){ return s + (p.capitalContributed || 0); }, 0);
+    if(hint) hint.textContent = "Total aportado: " + fmtMoney(total);
+    tbody.innerHTML = allPartners.map(function(p){
+      var id = p.id || p._localId;
+      var pct = total > 0 ? ((p.capitalContributed || 0) / total * 100) : 0;
+      return '<tr data-id="'+escapeHtml(id)+'">' +
+        '<td><input type="text" class="bm-input" data-field="name" value="'+escapeHtml(p.name||"")+'" placeholder="Nombre del socio"></td>' +
+        '<td><input type="number" step="1000" min="0" class="num-input bm-input" data-field="capitalContributed" value="'+(p.capitalContributed||0)+'"></td>' +
+        '<td class="cell-num">'+pct.toFixed(1)+'%</td>' +
+        '<td><input type="text" class="bm-input" data-field="notes" value="'+escapeHtml(p.notes||"")+'" placeholder="Notas"></td>' +
+        '<td><button class="btn btn-sm btn-danger-ghost" data-action="delete-partner" data-id="'+escapeHtml(id)+'">Borrar</button></td>' +
+      '</tr>';
+    }).join("");
+  }
+
+  var NUMERIC_PARTNER_FIELDS = {capitalContributed: true};
+  var partnersTableBody = document.getElementById("partnersTableBody");
+  partnersTableBody.addEventListener("input", function(e){
+    var input = e.target.closest("[data-field]");
+    if(!input) return;
+    var tr = e.target.closest("tr");
+    var p = allPartners.find(function(x){ return (x.id || x._localId) === tr.dataset.id; });
+    if(!p) return;
+    p[input.dataset.field] = NUMERIC_PARTNER_FIELDS[input.dataset.field] ? (parseFloat(input.value) || 0) : input.value;
+  });
+  partnersTableBody.addEventListener("change", function(e){
+    var input = e.target.closest("[data-field]");
+    if(!input) return;
+    var tr = e.target.closest("tr");
+    var value = NUMERIC_PARTNER_FIELDS[input.dataset.field] ? (parseFloat(input.value) || 0) : input.value;
+    commitPartnerField(tr.dataset.id, input.dataset.field, value);
+    if(input.dataset.field === "capitalContributed") renderPartners();
+  });
+  partnersTableBody.addEventListener("click", function(e){
+    var btn = e.target.closest("[data-action='delete-partner']");
+    if(!btn) return;
+    removePartner(btn.dataset.id);
+  });
+
+  // ---------- Team connect UI ----------
+  function reflectTeamUI(){
+    var connected = !!teamCode;
+    document.getElementById("teamDisconnected").style.display = connected ? "none" : "flex";
+    document.getElementById("teamConnected").style.display = connected ? "block" : "none";
+    if(connected) setTeamStatus("Conectado como " + (authorName || "vos") + " — sincroniza cada ~25s");
+  }
+  document.getElementById("authorNameInput").value = authorName;
+  document.getElementById("teamConnectBtn").addEventListener("click", function(){
+    var code = document.getElementById("teamCodeInput").value.trim();
+    var name = document.getElementById("authorNameInput").value.trim();
+    if(!code){ toast("Ingresá un código de equipo."); return; }
+    authorName = name;
+    try{ localStorage.setItem(AUTHOR_NAME_KEY, name); }catch(e){}
+    connectTeam(code);
+    reflectTeamUI();
+    toast("Conectado al equipo");
+  });
+  document.getElementById("teamRefreshBtn").addEventListener("click", function(){
+    refreshTeamData();
+    toast("Actualizando…");
+  });
+  document.getElementById("teamDisconnectBtn").addEventListener("click", function(){
+    if(!confirm("¿Salir del equipo? Vas a volver al guardado local de este navegador.")) return;
+    disconnectTeam();
+    reflectTeamUI();
+    location.reload();
   });
 
   // ---------- Save / export files (downloads capability, or a plain download outside the sandboxed viewer) ----------
@@ -1578,11 +1930,12 @@
       var importedBooks = Array.isArray(data.bookmakers) ? data.bookmakers : [];
       if(importedBets.length === 0 && importedBooks.length === 0){ toast("El backup no tiene apuestas ni casas para importar."); return; }
       if(!confirm("Se van a importar " + importedBets.length + " apuesta(s) y " + importedBooks.length + " casa(s). Los registros con el mismo id se actualizan; el resto se agrega. ¿Continuar?")) return;
-      importedBets.forEach(function(b){ upsertImported("bets", allBets, b); });
-      importedBooks.forEach(function(b){ upsertImported("bookmakers", allBookmakers, b); });
-      if(!db){
-        persistLocalBets();
-        persistLocalBookmakers();
+      if(db){
+        importedBets.forEach(function(b){ upsertImported("bets", allBets, b); });
+        importedBooks.forEach(function(b){ upsertImported("bookmakers", allBookmakers, b); });
+      } else {
+        withLocalBets(function(arr){ importedBets.forEach(function(b){ upsertImported("bets", arr, b); }); });
+        withLocalBookmakers(function(arr){ importedBooks.forEach(function(b){ upsertImported("bookmakers", arr, b); }); });
       }
       renderLog();
       renderBookmakers();
@@ -1604,9 +1957,18 @@
       }).catch(function(err){
         toast("No se pudo guardar la nota: " + (err && err.message ? err.message : "error"));
       });
+    } else if(teamCode){
+      teamFetch("bets", "PUT", bet.id, {patch: {notes: notes}}).then(function(){
+        toast("Nota guardada");
+        refreshTeamData();
+      }).catch(function(err){
+        toast("No se pudo guardar la nota: " + (err && err.message ? err.message : "error"));
+      });
     } else {
-      bet.notes = notes;
-      persistLocalBets();
+      withLocalBets(function(arr){
+        var b = arr.find(function(x){ return (x.id || x._localId) === betId; });
+        if(b) b.notes = notes;
+      });
       renderBetsTable();
       toast("Nota guardada");
     }
@@ -1932,13 +2294,30 @@
   var ARTIFACT_URL = "https://claude.ai/code/artifact/049c1f53-feea-408f-9d9e-c596f6b1f2a7";
 
   function setLocalMode(){
+    var storedTeamCode = null;
+    try{ storedTeamCode = localStorage.getItem(TEAM_CODE_KEY); }catch(e){}
+    if(storedTeamCode){
+      teamCode = storedTeamCode;
+      var codeInput = document.getElementById("teamCodeInput");
+      if(codeInput) codeInput.value = storedTeamCode;
+      reflectTeamUI();
+      refreshTeamData();
+      startTeamPolling();
+      dbBannerEl.className = "db-banner info";
+      dbBannerEl.style.display = "block";
+      dbBannerEl.innerHTML = 'Modo equipo: compartiendo datos con tu código de equipo (pestaña "Equipo"). Para usar el análisis de fotos con IA además, abrí la <a href="' + ARTIFACT_URL + '" target="_blank" rel="noopener">versión en la nube</a>.';
+      storageModeHintEl.textContent = "Guardado de equipo (compartido)";
+      return;
+    }
     allBets = loadLocalJSON(STORAGE_KEYS.bets, []);
     allBookmakers = loadLocalJSON(STORAGE_KEYS.bookmakers, []);
+    allPartners = loadLocalJSON(STORAGE_KEYS.partners, []);
     renderLog();
     renderBookmakers();
+    renderPartners();
     dbBannerEl.className = "db-banner info";
     dbBannerEl.style.display = "block";
-    dbBannerEl.innerHTML = 'Modo local: tu historial se guarda en este navegador (localStorage). Usá "Exportar backup (JSON)" cada tanto para tener una copia — por ejemplo, en esta misma carpeta. Para sincronizar entre dispositivos y usar el análisis de fotos con IA, abrí la <a href="' + ARTIFACT_URL + '" target="_blank" rel="noopener">versión en la nube</a>.';
+    dbBannerEl.innerHTML = 'Modo local: tu historial se guarda en este navegador (localStorage). Usá "Exportar backup (JSON)" cada tanto para tener una copia — por ejemplo, en esta misma carpeta. Para sincronizar entre dispositivos y usar el análisis de fotos con IA, abrí la <a href="' + ARTIFACT_URL + '" target="_blank" rel="noopener">versión en la nube</a>. Para compartir con un compañero de equipo, andá a la pestaña "Equipo".';
     storageModeHintEl.textContent = "Guardado local (localStorage) — no compartido entre navegadores/dispositivos";
   }
 
