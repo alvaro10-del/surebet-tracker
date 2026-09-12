@@ -1818,6 +1818,7 @@
     try{ localStorage.setItem(AUTHOR_NAME_KEY, name); }catch(e){}
     connectTeam(code);
     reflectTeamUI();
+    showTeamBanner();
     toast("Conectado al equipo");
   });
   document.getElementById("teamRefreshBtn").addEventListener("click", function(){
@@ -2293,6 +2294,13 @@
   var storageModeHintEl = document.getElementById("storageModeHint");
   var ARTIFACT_URL = "https://claude.ai/code/artifact/049c1f53-feea-408f-9d9e-c596f6b1f2a7";
 
+  function showTeamBanner(){
+    dbBannerEl.className = "db-banner info";
+    dbBannerEl.style.display = "block";
+    dbBannerEl.innerHTML = 'Modo equipo: compartiendo datos con tu código de equipo (pestaña "Equipo"). Para usar el análisis de fotos con IA además, abrí la <a href="' + ARTIFACT_URL + '" target="_blank" rel="noopener">versión en la nube</a>.';
+    storageModeHintEl.textContent = "Guardado de equipo (compartido)";
+  }
+
   function setLocalMode(){
     var storedTeamCode = null;
     try{ storedTeamCode = localStorage.getItem(TEAM_CODE_KEY); }catch(e){}
@@ -2303,10 +2311,7 @@
       reflectTeamUI();
       refreshTeamData();
       startTeamPolling();
-      dbBannerEl.className = "db-banner info";
-      dbBannerEl.style.display = "block";
-      dbBannerEl.innerHTML = 'Modo equipo: compartiendo datos con tu código de equipo (pestaña "Equipo"). Para usar el análisis de fotos con IA además, abrí la <a href="' + ARTIFACT_URL + '" target="_blank" rel="noopener">versión en la nube</a>.';
-      storageModeHintEl.textContent = "Guardado de equipo (compartido)";
+      showTeamBanner();
       return;
     }
     allBets = loadLocalJSON(STORAGE_KEYS.bets, []);
