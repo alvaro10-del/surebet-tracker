@@ -305,6 +305,19 @@
   .photo-note{ font-size:11px; color:var(--text-muted); max-width:280px; line-height:1.5; }
 
   .photo-note-block{ background:var(--accent-soft); color:var(--accent-strong); font-size:12.5px; padding:8px 12px; border-radius:9px; margin-bottom:12px; }
+
+  .photo-chat{ margin-top:16px; padding-top:16px; border-top:1px dashed var(--border); }
+  .photo-chat-log{ display:flex; flex-direction:column; gap:8px; margin-bottom:10px; max-height:340px; overflow-y:auto; }
+  .chat-bubble{ max-width:85%; padding:9px 12px; border-radius:12px; font-size:13px; line-height:1.5; white-space:pre-wrap; }
+  .chat-bubble.user{ align-self:flex-end; background:var(--accent); color:#fff; border-bottom-right-radius:3px; }
+  .chat-bubble.assistant{ align-self:flex-start; background:var(--surface-2); border:1px solid var(--border); color:var(--text-primary); border-bottom-left-radius:3px; }
+  .chat-bubble.thinking{ color:var(--text-muted); font-style:italic; }
+  .photo-chat-row{ display:flex; gap:8px; }
+  .photo-chat-row input{
+    flex:1; font-family:'IBM Plex Sans'; font-size:13px; color:var(--text-primary);
+    background:var(--surface-2); border:1px solid var(--border); border-radius:8px; padding:9px 10px; outline:none;
+  }
+  .photo-chat-row input:focus{ border-color:var(--accent); }
   .opp-card{ background:var(--surface-2); border:1px solid var(--border); border-radius:12px; padding:14px; margin-top:12px; }
   .opp-header{ display:flex; justify-content:space-between; align-items:flex-start; gap:10px; flex-wrap:wrap; margin-bottom:6px; }
   .badge-mini{ font-family:'IBM Plex Mono'; font-size:11.5px; font-weight:600; padding:4px 9px; border-radius:100px; white-space:nowrap; }
@@ -391,6 +404,14 @@
           </div>
         </div>
         <div id="photoResults"></div>
+        <div id="photoChat" class="photo-chat" style="display:none;">
+          <div class="card-hint" style="margin:0 0 8px;">¿Te quedó alguna duda sobre esto? Preguntale a Claude — se acuerda de lo que ya analizó.</div>
+          <div id="photoChatLog" class="photo-chat-log"></div>
+          <div class="photo-chat-row">
+            <input type="text" id="photoChatInput" placeholder="Ej: ¿por qué esta no es surebet?">
+            <button class="btn btn-sm btn-accent" id="photoChatSendBtn">Preguntar</button>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -896,6 +917,7 @@
   var sampleImageCaps = null;
   var selectedPhotoFiles = [];
   var lastOpportunities = [];
+  var chatHistory = [];
 
   function setPhotoAvail(msg, warn){
     var el = document.getElementById("photoAvailStatus");
@@ -1003,7 +1025,24 @@
           err.code = body.error || "upstream_error";
           throw err;
         }
-        return tolerantJsonParse(body.text || "");
+        return {parsed: tolerantJsonParse(body.text || ""), raw: body.text || ""};
+      });
+    });
+  }
+
+  function chatViaWorker(newMessage, history){
+    return fetch(EXTERNAL_AI_CONFIG.workerUrl, {
+      method: "POST",
+      headers: {"Content-Type": "application/json", "X-App-Secret": EXTERNAL_AI_CONFIG.appSecret},
+      body: JSON.stringify({prompt: newMessage, history: history})
+    }).then(function(resp){
+      return resp.json().catch(function(){ return {}; }).then(function(body){
+        if(!resp.ok){
+          var err = new Error(body.error || ("HTTP " + resp.status));
+          err.code = body.error || "upstream_error";
+          throw err;
+        }
+        return body.text || "";
       });
     });
   }
@@ -1243,11 +1282,15 @@
       "y en promedio se pierde plata haciéndola, así no la confunde con una recomendación.";
 
     var task = activeProvider === "claude"
-      ? sampleFn.json(prompt, {images: selectedPhotoFiles})
+      ? sampleFn(prompt, {images: selectedPhotoFiles}).then(function(res){ return {parsed: tolerantJsonParse(res.text), raw: res.text}; })
       : analyzeViaWorker(prompt, selectedPhotoFiles);
 
-    task.then(function(data){
+    task.then(function(result){
       btn.disabled = false;
+      var data = result.parsed;
+      chatHistory = [{role: "user", text: prompt}, {role: "assistant", text: result.raw}];
+      renderChatLog();
+      document.getElementById("photoChat").style.display = "block";
       var opps = Array.isArray(data && data.opportunities) ? data.opportunities : [];
       opps = opps.map(function(o){
         var oLegs = Array.isArray(o && o.legs) ? o.legs : [];
@@ -1286,6 +1329,56 @@
       status.textContent = PHOTO_ERROR_MESSAGES[code] || ("No se pudieron analizar las imágenes" + (err && err.message ? ": " + err.message : "."));
     });
   });
+
+  // ---------- Follow-up chat about the analyzed screenshots ----------
+  function renderChatLog(){
+    var log = document.getElementById("photoChatLog");
+    // Skip turn 0 (the long instruction prompt) and turn 1 (the raw JSON reply) — show only real Q&A.
+    var visible = chatHistory.slice(2);
+    log.innerHTML = visible.map(function(t){
+      return '<div class="chat-bubble ' + (t.role === "user" ? "user" : "assistant") + '">' + escapeHtml(t.text) + '</div>';
+    }).join("");
+    log.scrollTop = log.scrollHeight;
+  }
+
+  function sendChatMessage(){
+    var input = document.getElementById("photoChatInput");
+    var msg = input.value.trim();
+    if(!msg || !activeProvider || chatHistory.length === 0) return;
+    var sendBtn = document.getElementById("photoChatSendBtn");
+    var priorHistory = chatHistory.slice();
+    chatHistory.push({role: "user", text: msg});
+    renderChatLog();
+    input.value = "";
+    input.disabled = true;
+    sendBtn.disabled = true;
+    var log = document.getElementById("photoChatLog");
+    log.insertAdjacentHTML("beforeend", '<div class="chat-bubble assistant thinking" id="chatThinking">Pensando…</div>');
+    log.scrollTop = log.scrollHeight;
+
+    var task = activeProvider === "claude"
+      ? sampleFn(chatHistory.map(function(t){ return {role: t.role, content: t.text}; })).then(function(res){ return res.text; })
+      : chatViaWorker(msg, priorHistory);
+
+    task.then(function(replyText){
+      chatHistory.push({role: "assistant", text: replyText});
+      input.disabled = false;
+      sendBtn.disabled = false;
+      renderChatLog();
+      input.focus();
+    }).catch(function(err){
+      chatHistory.pop(); // drop the unanswered user turn so a retry doesn't duplicate it
+      var thinking = document.getElementById("chatThinking");
+      if(thinking) thinking.remove();
+      input.disabled = false;
+      sendBtn.disabled = false;
+      input.value = msg;
+      var code = err && err.code;
+      toast(PHOTO_ERROR_MESSAGES[code] || ("No se pudo responder" + (err && err.message ? ": " + err.message : ".")));
+    });
+  }
+  document.getElementById("photoChatSendBtn").addEventListener("click", sendChatMessage);
+  document.getElementById("photoChatInput").addEventListener("keydown", function(e){ if(e.key === "Enter") sendChatMessage(); });
 
   // ---------- Storage (cloud db, or localStorage when running outside the artifact viewer) ----------
   var STORAGE_KEYS = { bets: "surebet-tracker:bets", bookmakers: "surebet-tracker:bookmakers", partners: "surebet-tracker:partners" };

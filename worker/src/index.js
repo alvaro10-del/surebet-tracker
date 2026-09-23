@@ -135,8 +135,16 @@ async function handleAnalyze(request, env) {
   }
 
   const prompt = body && body.prompt;
-  const images = body && body.images;
-  if (!prompt || typeof prompt !== "string" || !Array.isArray(images) || images.length === 0) {
+  const images = (body && body.images) || [];
+  const history = body && body.history;
+  if (!prompt || typeof prompt !== "string") {
+    return json({ error: "bad_request" }, 400, env);
+  }
+  if (!Array.isArray(images)) {
+    return json({ error: "bad_request" }, 400, env);
+  }
+  // A fresh analysis needs at least one image; a chat follow-up carries prior turns instead.
+  if (images.length === 0 && (!Array.isArray(history) || history.length === 0)) {
     return json({ error: "bad_request" }, 400, env);
   }
   if (images.length > 6) {
@@ -150,6 +158,18 @@ async function handleAnalyze(request, env) {
     if (img.base64.length > 5_500_000) {
       return json({ error: "image_too_large" }, 400, env);
     }
+  }
+  let priorTurns = [];
+  if (history !== undefined) {
+    if (!Array.isArray(history) || history.length > 40) {
+      return json({ error: "bad_request" }, 400, env);
+    }
+    for (const turn of history) {
+      if (!turn || (turn.role !== "user" && turn.role !== "assistant") || typeof turn.text !== "string" || !turn.text) {
+        return json({ error: "bad_request" }, 400, env);
+      }
+    }
+    priorTurns = history.map((t) => ({ role: t.role, content: [{ type: "text", text: t.text }] }));
   }
 
   // Daily quota, tracked per UTC day in KV.
@@ -170,6 +190,7 @@ async function handleAnalyze(request, env) {
       source: { type: "base64", media_type: img.mediaType, data: img.base64 },
     })),
   ];
+  const messages = [...priorTurns, { role: "user", content }];
 
   let anthropicResp;
   try {
@@ -183,7 +204,7 @@ async function handleAnalyze(request, env) {
       body: JSON.stringify({
         model: ANTHROPIC_MODEL,
         max_tokens: 8000,
-        messages: [{ role: "user", content }],
+        messages: messages,
       }),
     });
   } catch (e) {
