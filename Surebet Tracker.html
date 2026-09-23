@@ -1,5 +1,4 @@
 <title>Surebet Tracker</title>
-<meta name="robots" content="noindex, nofollow">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@600;700;800&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -332,39 +331,9 @@
   .bm-input:focus, select.bm-select:focus{ border-color:var(--accent); }
 
   @media (prefers-reduced-motion: reduce){ *{ transition:none !important; animation:none !important; } }
-
-  .gate-overlay{
-    position:fixed; inset:0; z-index:100; background:var(--bg);
-    display:flex; align-items:center; justify-content:center; padding:20px;
-  }
-  .gate-box{
-    width:100%; max-width:340px; background:var(--surface); border:1px solid var(--border);
-    border-radius:14px; padding:28px 24px; box-shadow:var(--shadow); text-align:center;
-  }
-  .gate-brand{ font-family:'Big Shoulders Display'; font-weight:800; font-size:22px; margin-bottom:4px; }
-  .gate-brand span{ color:var(--accent); }
-  .gate-hint{ font-size:12.5px; color:var(--text-muted); margin:0 0 18px; }
-  .gate-box input{
-    font-family:'IBM Plex Mono'; font-size:15px; text-align:center; letter-spacing:0.05em;
-    background:var(--surface-2); border:1px solid var(--border); border-radius:8px;
-    padding:11px 12px; width:100%; outline:none; margin-bottom:12px;
-  }
-  .gate-box input:focus{ border-color:var(--accent); }
-  .gate-box .btn{ width:100%; }
-  .gate-error{ font-size:12px; color:var(--danger); margin-top:10px; min-height:16px; }
 </style>
 
-<div class="gate-overlay" id="gateOverlay">
-  <div class="gate-box">
-    <div class="gate-brand">SUREBET<span>//</span>TRACKER</div>
-    <p class="gate-hint">Ingresá el PIN de acceso para entrar.</p>
-    <input type="password" id="gateInput" placeholder="PIN" autocomplete="off" autocapitalize="off" spellcheck="false" inputmode="numeric" pattern="[0-9]*" maxlength="4">
-    <button class="btn btn-accent" id="gateSubmitBtn">Entrar</button>
-    <div class="gate-error" id="gateError"></div>
-  </div>
-</div>
-
-<div class="app" id="appRoot" style="display:none;">
+<div class="app">
   <div class="topbar">
     <div class="brand">
       <div class="brand-mark">SUREBET<span>//</span>TRACKER</div>
@@ -2314,6 +2283,13 @@
     }
   });
 
+  // ---------- Init ----------
+  renderLegs();
+  compute();
+  renderLog();
+  renderBookmakers();
+  initSample();
+
   var dbBannerEl = document.getElementById("dbBanner");
   var storageModeHintEl = document.getElementById("storageModeHint");
   var ARTIFACT_URL = "https://claude.ai/code/artifact/049c1f53-feea-408f-9d9e-c596f6b1f2a7";
@@ -2324,63 +2300,6 @@
     dbBannerEl.innerHTML = 'Modo equipo: compartiendo datos con tu código de equipo (pestaña "Equipo"). Para usar el análisis de fotos con IA además, abrí la <a href="' + ARTIFACT_URL + '" target="_blank" rel="noopener">versión en la nube</a>.';
     storageModeHintEl.textContent = "Guardado de equipo (compartido)";
   }
-
-  // ---------- Access gate (deters casual visitors/search bots — not real security) ----------
-  var GATE_HASH = "b8a137cb2c0a7f90827dc03b78395624d32d7dc701b6e094a8bc5d8940723752";
-  var GATE_OK_KEY = "surebet-tracker:gate-ok";
-
-  function revealApp(){
-    document.getElementById("gateOverlay").style.display = "none";
-    document.getElementById("appRoot").style.display = "block";
-    startApp();
-  }
-
-  function sha256Hex(str){
-    var enc = new TextEncoder().encode(str);
-    return crypto.subtle.digest("SHA-256", enc).then(function(buf){
-      return Array.prototype.map.call(new Uint8Array(buf), function(b){ return b.toString(16).padStart(2, "0"); }).join("");
-    });
-  }
-
-  var gateOk = false;
-  try{ gateOk = localStorage.getItem(GATE_OK_KEY) === "1"; }catch(e){}
-
-  if(gateOk){
-    revealApp();
-  } else {
-    var gateInput = document.getElementById("gateInput");
-    var gateError = document.getElementById("gateError");
-    var attemptGate = function(){
-      var val = gateInput.value;
-      if(!val) return;
-      if(!(window.crypto && window.crypto.subtle)){
-        try{ localStorage.setItem(GATE_OK_KEY, "1"); }catch(e){}
-        revealApp();
-        return;
-      }
-      sha256Hex(val).then(function(hash){
-        if(hash === GATE_HASH){
-          try{ localStorage.setItem(GATE_OK_KEY, "1"); }catch(e){}
-          revealApp();
-        } else {
-          gateError.textContent = "Código incorrecto.";
-          gateInput.value = "";
-          gateInput.focus();
-        }
-      });
-    };
-    document.getElementById("gateSubmitBtn").addEventListener("click", attemptGate);
-    gateInput.addEventListener("keydown", function(e){ if(e.key === "Enter") attemptGate(); });
-    gateInput.focus();
-  }
-
-  // ---------- Init ----------
-  function startApp(){
-  renderLegs();
-  compute();
-  renderLog();
-  renderBookmakers();
-  initSample();
 
   function setLocalMode(){
     var storedTeamCode = null;
@@ -2451,6 +2370,5 @@
   } else {
     setLocalMode();
   }
-  } // end startApp
 })();
 </script>
