@@ -477,6 +477,10 @@
             <label for="totalStake">Monto total a invertir</label>
             <input type="number" min="0" step="1000" class="num-input" id="totalStake" value="200000">
           </div>
+          <div class="field" style="flex:0 0 190px;">
+            <label for="roundTo" title="Redondea el monto de cada casa a un múltiplo de este valor, para que no se vea un número calculado exacto">Redondear montos a</label>
+            <input type="number" min="0" step="1000" class="num-input" id="roundTo" value="0" placeholder="0 = sin redondeo">
+          </div>
         </div>
 
         <div class="field-row">
@@ -530,7 +534,7 @@
         <div class="table-wrap">
           <table id="distTable">
             <thead>
-              <tr><th>Casa</th><th>Resultado</th><th>Cuota</th><th>Com.</th><th>Apostar</th><th>Si gana</th></tr>
+              <tr><th>Casa</th><th>Resultado</th><th>Cuota</th><th>Com.</th><th>Apostar</th><th>Si gana</th><th>Ganancia</th></tr>
             </thead>
             <tbody id="distTableBody"></tbody>
           </table>
@@ -841,8 +845,14 @@
 
   var lastComputation = null;
 
+  function currentRoundTo(){
+    var v = parseFloat(document.getElementById("roundTo").value);
+    return isFinite(v) && v > 0 ? v : 0;
+  }
+
   function compute(){
     var totalStake = currentTotalStake();
+    var roundTo = currentRoundTo();
     var validLegs = legs.every(function(l){ return l.odds > 1 && l.bookmaker.trim() && l.outcome.trim(); });
     var impliedSum = legs.reduce(function(s,l){ return s + (l.odds > 1 ? 1/effOdds(l) : 0); }, 0);
 
@@ -864,15 +874,36 @@
     document.getElementById("saveBetBtn").disabled = false;
 
     var isMulti = legs.length >= 2;
-    var isSurebet = isMulti && impliedSum < 1;
-    var profitPct = impliedSum > 0 ? (1/impliedSum - 1) * 100 : 0;
 
-    var computedLegs = legs.map(function(l){
-      var eo = effOdds(l);
-      var stake = isMulti ? (totalStake * (1/eo) / impliedSum) : totalStake;
-      var payout = stake * eo;
-      return Object.assign({}, l, {stake: stake, payout: payout, profitIfWin: payout - totalStake});
-    });
+    function buildLegs(useRounding){
+      return legs.map(function(l){
+        var eo = effOdds(l);
+        var rawStake = isMulti ? (totalStake * (1/eo) / impliedSum) : totalStake;
+        var stake = rawStake;
+        if(useRounding && roundTo > 0){
+          stake = Math.round(rawStake / roundTo) * roundTo;
+          if(stake <= 0) stake = roundTo;
+        }
+        return Object.assign({}, l, {stake: stake, payout: stake * eo});
+      });
+    }
+
+    var computedLegs = buildLegs(true);
+    var actualTotal = computedLegs.reduce(function(s,l){ return s + l.stake; }, 0);
+    computedLegs.forEach(function(l){ l.profitIfWin = l.payout - actualTotal; });
+    var profits = computedLegs.map(function(l){ return l.profitIfWin; });
+    var minProfit = Math.min.apply(null, profits);
+    var maxProfit = Math.max.apply(null, profits);
+    var isSurebet = isMulti && minProfit > 0;
+    var profitPct = actualTotal > 0 ? (minProfit / actualTotal) * 100 : 0;
+
+    var roundingBrokeIt = false;
+    if(isMulti && roundTo > 0 && !isSurebet){
+      var exactLegs = buildLegs(false);
+      var exactTotal = exactLegs.reduce(function(s,l){ return s + l.stake; }, 0);
+      var exactMin = Math.min.apply(null, exactLegs.map(function(l){ return (l.stake * effOdds(l)) - exactTotal; }));
+      roundingBrokeIt = exactMin > 0;
+    }
 
     var limitWarnings = computedLegs.map(function(l){
       var bm = findBookmakerByName(l.bookmaker);
@@ -897,10 +928,19 @@
     var metricsHtml = '';
     metricsHtml += '<div class="metric-row"><span class="metric-label">Suma de probabilidades implícitas (Σ 1/cuota)</span><span class="metric-value num">'+impliedSum.toFixed(4)+'</span></div>';
     metricsHtml += '<div class="prob-bar"><div class="prob-bar-fill '+(impliedSum<1?"ok":"bad")+'" style="width:'+barPct+'%"></div><div class="prob-bar-mark" style="left:100%"></div></div>';
+    if(roundingBrokeIt){
+      metricsHtml += '<div class="metric-row"><span class="metric-label" style="color:var(--danger);">⚠ Redondear a '+fmtMoney(roundTo)+' elimina la ganancia garantizada</span><span class="metric-value neg num">con montos exactos sí era surebet</span></div>';
+    }
     if(isMulti){
-      metricsHtml += '<div class="metric-row"><span class="metric-label">'+(isSurebet?"Ganancia garantizada":"Recargo de casas (overround)")+'</span><span class="metric-value '+(isSurebet?"pos":"neg")+' num">'+fmtPct(isSurebet?profitPct:-profitPct)+'</span></div>';
-      var guaranteedProfit = totalStake * (1 - impliedSum) / impliedSum;
-      metricsHtml += '<div class="metric-row"><span class="metric-label">Ganancia neta estimada</span><span class="metric-value '+(guaranteedProfit>=0?"pos":"neg")+' num">'+fmtMoney(guaranteedProfit)+'</span></div>';
+      var worstCaseSuffix = roundTo > 0 ? " (peor caso)" : "";
+      metricsHtml += '<div class="metric-row"><span class="metric-label">'+(isSurebet?("Ganancia garantizada"+worstCaseSuffix):"Recargo de casas (overround)")+'</span><span class="metric-value '+(isSurebet?"pos":"neg")+' num">'+fmtPct(isSurebet ? profitPct : -Math.abs(profitPct))+'</span></div>';
+      metricsHtml += '<div class="metric-row"><span class="metric-label">'+("Ganancia neta estimada"+worstCaseSuffix)+'</span><span class="metric-value '+(minProfit>=0?"pos":"neg")+' num">'+fmtMoney(minProfit)+'</span></div>';
+      if(roundTo > 0 && Math.abs(maxProfit - minProfit) > 0.5){
+        metricsHtml += '<div class="metric-row"><span class="metric-label">Rango según qué resultado gane</span><span class="metric-value num">'+fmtMoney(minProfit)+' — '+fmtMoney(maxProfit)+'</span></div>';
+      }
+      if(roundTo > 0 && Math.abs(actualTotal - totalStake) > 0.5){
+        metricsHtml += '<div class="metric-row"><span class="metric-label">Total invertido (redondeado)</span><span class="metric-value num">'+fmtMoney(actualTotal)+'</span></div>';
+      }
     } else {
       metricsHtml += '<div class="metric-row"><span class="metric-label">Ganancia si gana</span><span class="metric-value pos num">'+fmtMoney(computedLegs[0].profitIfWin)+'</span></div>';
     }
@@ -914,22 +954,25 @@
         '<td class="cell-num">'+l.odds.toFixed(2)+'</td>' +
         '<td class="cell-num">'+(l.commissionPct ? l.commissionPct+"%" : "—")+'</td>' +
         '<td class="cell-num">'+fmtMoney(l.stake)+'</td>' +
-        '<td class="cell-num">'+fmtMoney(l.payout)+'</td>';
+        '<td class="cell-num">'+fmtMoney(l.payout)+'</td>' +
+        '<td class="cell-num '+(l.profitIfWin>=0?"metric-value pos":"metric-value neg")+'">'+fmtMoney(l.profitIfWin)+'</td>';
       tbody.appendChild(tr);
     });
 
     lastComputation = {
-      totalStake: totalStake,
+      totalStake: actualTotal,
       impliedSum: impliedSum,
       isSurebet: isSurebet,
       isMulti: isMulti,
-      profitPct: isMulti ? (isSurebet ? profitPct : -profitPct) : null,
-      expectedProfit: isMulti ? (totalStake * (1 - impliedSum) / impliedSum) : computedLegs[0].profitIfWin,
+      profitPct: isMulti ? (isSurebet ? profitPct : -Math.abs(profitPct)) : null,
+      expectedProfit: isMulti ? minProfit : computedLegs[0].profitIfWin,
+      roundTo: roundTo,
       legs: computedLegs
     };
   }
 
   document.getElementById("totalStake").addEventListener("input", compute);
+  document.getElementById("roundTo").addEventListener("input", compute);
 
   // ---------- Photo-to-surebet (Claude "sample" capability in the artifact viewer, ----------
   // ---------- or a Cloudflare Worker proxy as a fallback for the public/static page) ----------
