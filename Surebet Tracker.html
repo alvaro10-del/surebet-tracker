@@ -2374,8 +2374,14 @@
       } else {
         statusPill = '<span class="pill '+((b.profit||0)>=0?"settled-pos":"settled-neg")+'">Liquidada</span>';
       }
-      var resultCell = b.status === "pendiente" ? '<span class="type-tag">—</span>' :
-        '<span class="cell-num '+((b.profit||0)>=0?"metric-value pos":"metric-value neg")+'">'+fmtMoney(b.profit||0)+'</span>';
+      var resultCell;
+      if(b.status === "pendiente"){
+        resultCell = (b.expectedProfit != null)
+          ? '<span class="cell-num '+(b.expectedProfit>=0?"metric-value pos":"metric-value neg")+'" title="Ganancia posible si se liquida a favor, según lo calculado al guardar">~'+fmtMoney(b.expectedProfit)+'</span>'
+          : '<span class="type-tag">—</span>';
+      } else {
+        resultCell = '<span class="cell-num '+((b.profit||0)>=0?"metric-value pos":"metric-value neg")+'">'+fmtMoney(b.profit||0)+'</span>';
+      }
 
       var eventCell = escapeHtml(b.event) + (b.notes ? '<div class="row-note-preview" title="'+escapeHtml(b.notes)+'">📝 '+escapeHtml(b.notes)+'</div>' : '');
 
