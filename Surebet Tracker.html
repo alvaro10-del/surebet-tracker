@@ -212,6 +212,8 @@
   .pill.settled-neg{ background:var(--danger-soft); color:var(--danger); }
   .pill.void{ background:var(--surface-2); color:var(--text-muted); }
   .type-tag{ font-size:11px; color:var(--text-muted); }
+  .calc4x1000-box{ display:flex; gap:10px; flex-wrap:wrap; align-items:center; background:var(--surface-2); border:1px solid var(--border); border-radius:10px; padding:10px 12px; margin-bottom:14px; }
+  .calc4x1000-box input{ max-width:220px; }
 
   .settle-panel{ background:var(--surface-2); border:1px solid var(--border); border-radius:10px; padding:10px; margin-top:6px; display:flex; flex-wrap:wrap; gap:6px; }
   .settle-panel .btn{ font-size:12px; }
@@ -386,6 +388,7 @@
       <button class="tab-btn active" data-tab="calc">Calculadora</button>
       <button class="tab-btn" data-tab="log">Registro &amp; P&amp;L</button>
       <button class="tab-btn" data-tab="books">Casas</button>
+      <button class="tab-btn" data-tab="expenses">Gastos</button>
     </nav>
   </div>
 
@@ -616,6 +619,38 @@
       <div id="bookmakersEmpty" class="empty-state" style="display:none;">
         <div class="display">Todavía no agregaste casas</div>
         <div>Sumá las casas donde tenés cuenta para llevar el estado de cada una.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- GASTOS -->
+  <section id="tab-expenses" class="tab-panel">
+    <div class="card">
+      <h3 class="card-title" style="font-size:17px;">Gastos y costos reales</h3>
+      <p class="card-hint">Todo lo que te come ganancia además de las apuestas en sí: el 4x1000, pérdidas por cuotas que cambiaron o eventos que se cayeron, la suscripción de Betburger u otra herramienta, etc. Se descuenta del beneficio neto en Registro para que sepas cuánto ganaste de verdad.</p>
+
+      <div class="calc4x1000-box">
+        <span class="type-tag">Calculadora rápida 4x1000:</span>
+        <input type="number" min="0" step="1000" class="num-input" id="calc4x1000Input" placeholder="Monto de la operación">
+        <span class="type-tag">= <strong id="calc4x1000Result" class="cell-num">$0 COP</strong></span>
+      </div>
+
+      <div class="toolbar-row">
+        <button class="btn btn-sm btn-accent" id="addExpenseBtn">+ Agregar gasto</button>
+        <div class="toolbar-spacer"></div>
+        <span class="toolbar-hint" id="expensesTotalHint"></span>
+      </div>
+      <div class="table-wrap">
+        <table id="expensesTable">
+          <thead>
+            <tr><th>Fecha</th><th>Descripción</th><th>Categoría</th><th>Monto</th><th></th></tr>
+          </thead>
+          <tbody id="expensesTableBody"></tbody>
+        </table>
+      </div>
+      <div id="expensesEmpty" class="empty-state" style="display:none;">
+        <div class="display">Todavía no registraste gastos</div>
+        <div>Sumá el 4x1000, suscripciones y pérdidas por apuestas rotas para ver tu ganancia real.</div>
       </div>
     </div>
   </section>
@@ -1407,10 +1442,12 @@
   document.getElementById("photoChatInput").addEventListener("keydown", function(e){ if(e.key === "Enter") sendChatMessage(); });
 
   // ---------- Storage (cloud db, or localStorage when running outside the artifact viewer) ----------
-  var STORAGE_KEYS = { bets: "surebet-tracker:bets", bookmakers: "surebet-tracker:bookmakers" };
+  var STORAGE_KEYS = { bets: "surebet-tracker:bets", bookmakers: "surebet-tracker:bookmakers", expenses: "surebet-tracker:expenses" };
   var db = null;
   var allBets = [];
   var allBookmakers = [];
+  var allExpenses = [];
+  var EXPENSE_CATEGORIES = ["Impuesto (4x1000)", "Suscripción herramienta", "Pérdida por apuesta rota", "Otro"];
 
   function loadLocalJSON(key, fallback){
     try{
@@ -1437,6 +1474,13 @@
     var finalArr = Array.isArray(result) ? result : fresh;
     saveLocalJSON(STORAGE_KEYS.bookmakers, finalArr);
     allBookmakers = finalArr;
+  }
+  function withLocalExpenses(mutator){
+    var fresh = loadLocalJSON(STORAGE_KEYS.expenses, []);
+    var result = mutator(fresh);
+    var finalArr = Array.isArray(result) ? result : fresh;
+    saveLocalJSON(STORAGE_KEYS.expenses, finalArr);
+    allExpenses = finalArr;
   }
   function betsCollection(){ return db.collection("bets"); }
 
@@ -1699,6 +1743,124 @@
     removeBookmaker(btn.dataset.id);
   });
 
+  // ---------- Gastos (4x1000, suscripciones, pérdidas por apuestas rotas) ----------
+  function addExpenseRow(){
+    var rec = {date: todayStr(), description:"", category: EXPENSE_CATEGORIES[0], amount: 0, createdAt: Date.now()};
+    if(db){
+      db.collection("expenses").add(rec).catch(function(err){
+        toast("No se pudo agregar el gasto: " + (err && err.message ? err.message : "error"));
+      });
+    } else {
+      rec._localId = uid();
+      withLocalExpenses(function(arr){ arr.unshift(rec); });
+      renderExpenses();
+      renderStats();
+    }
+  }
+  document.getElementById("addExpenseBtn").addEventListener("click", addExpenseRow);
+
+  function commitExpenseField(id, field, value){
+    if(db){
+      var ex = allExpenses.find(function(x){ return (x.id || x._localId) === id; });
+      if(!ex) return;
+      var patch = {}; patch[field] = value;
+      db.doc("expenses/" + ex.id).update(patch).catch(function(err){
+        toast("No se pudo guardar: " + (err && err.message ? err.message : "error"));
+      });
+    } else {
+      withLocalExpenses(function(arr){
+        var x = arr.find(function(e){ return (e.id || e._localId) === id; });
+        if(x) x[field] = value;
+      });
+    }
+    renderStats();
+  }
+
+  function removeExpense(id){
+    if(!confirm("¿Eliminar este gasto?")) return;
+    var ex = allExpenses.find(function(x){ return (x.id || x._localId) === id; });
+    if(!ex) return;
+    if(db && ex.id){
+      db.doc("expenses/" + ex.id).delete().catch(function(err){
+        toast("No se pudo eliminar: " + (err && err.message ? err.message : "error"));
+      });
+    } else {
+      withLocalExpenses(function(arr){ return arr.filter(function(e){ return (e.id || e._localId) !== id; }); });
+      renderExpenses();
+      renderStats();
+    }
+  }
+
+  function renderExpenses(){
+    var tbody = document.getElementById("expensesTableBody");
+    var empty = document.getElementById("expensesEmpty");
+    var totalHint = document.getElementById("expensesTotalHint");
+    if(allExpenses.length === 0){
+      tbody.innerHTML = "";
+      empty.style.display = "block";
+      if(totalHint) totalHint.textContent = "";
+      return;
+    }
+    empty.style.display = "none";
+    if(totalHint){
+      var total = allExpenses.reduce(function(s,e){ return s + (e.amount || 0); }, 0);
+      totalHint.textContent = "Total en gastos: " + fmtMoney(total);
+    }
+    tbody.innerHTML = allExpenses.map(function(e){
+      var id = e.id || e._localId;
+      return '<tr data-id="'+escapeHtml(id)+'">' +
+        '<td><input type="date" class="bm-input" data-field="date" value="'+escapeHtml(e.date||"")+'"></td>' +
+        '<td><input type="text" class="bm-input" data-field="description" value="'+escapeHtml(e.description||"")+'" placeholder="Ej: cuota cambió en Betplay"></td>' +
+        '<td><select class="bm-select" data-field="category">' +
+          EXPENSE_CATEGORIES.map(function(c){
+            return '<option value="'+escapeHtml(c)+'"'+(e.category===c?' selected':'')+'>'+escapeHtml(c)+'</option>';
+          }).join('') +
+        '</select></td>' +
+        '<td><input type="number" step="100" min="0" class="num-input bm-input" data-field="amount" value="'+(e.amount!=null?e.amount:0)+'"></td>' +
+        '<td><button class="btn btn-sm btn-danger-ghost" data-action="delete-expense" data-id="'+escapeHtml(id)+'">Borrar</button></td>' +
+      '</tr>';
+    }).join("");
+  }
+
+  var NUMERIC_EXPENSE_FIELDS = {amount: true};
+  var expensesTableBody = document.getElementById("expensesTableBody");
+  expensesTableBody.addEventListener("input", function(e){
+    var input = e.target.closest("[data-field]");
+    if(!input) return;
+    var tr = e.target.closest("tr");
+    var ex = allExpenses.find(function(x){ return (x.id || x._localId) === tr.dataset.id; });
+    if(!ex) return;
+    ex[input.dataset.field] = NUMERIC_EXPENSE_FIELDS[input.dataset.field] ? (parseFloat(input.value) || 0) : input.value;
+  });
+  expensesTableBody.addEventListener("change", function(e){
+    var input = e.target.closest("[data-field]");
+    if(!input) return;
+    var tr = e.target.closest("tr");
+    var value = NUMERIC_EXPENSE_FIELDS[input.dataset.field] ? (parseFloat(input.value) || 0) : input.value;
+    commitExpenseField(tr.dataset.id, input.dataset.field, value);
+    if(input.dataset.field === "amount"){
+      var totalHint = document.getElementById("expensesTotalHint");
+      if(totalHint){
+        var total = allExpenses.reduce(function(s,e2){ return s + (e2.amount || 0); }, 0);
+        totalHint.textContent = "Total en gastos: " + fmtMoney(total);
+      }
+    }
+  });
+  expensesTableBody.addEventListener("click", function(e){
+    var btn = e.target.closest("[data-action='delete-expense']");
+    if(!btn) return;
+    removeExpense(btn.dataset.id);
+  });
+
+  var calc4x1000Input = document.getElementById("calc4x1000Input");
+  var calc4x1000Result = document.getElementById("calc4x1000Result");
+  if(calc4x1000Input){
+    calc4x1000Input.addEventListener("input", function(){
+      var amount = parseFloat(calc4x1000Input.value) || 0;
+      calc4x1000Result.textContent = fmtMoney(amount * 0.004);
+    });
+  }
+
   // ---------- Save / export files (downloads capability, or a plain download outside the sandboxed viewer) ----------
   function classicDownload(blob, filename){
     var url = URL.createObjectURL(blob);
@@ -1736,7 +1898,8 @@
       version: 1,
       exportedAt: new Date().toISOString(),
       bets: allBets.map(function(b){ var c = Object.assign({}, b); delete c._localId; return c; }),
-      bookmakers: allBookmakers.map(function(b){ var c = Object.assign({}, b); delete c._localId; return c; })
+      bookmakers: allBookmakers.map(function(b){ var c = Object.assign({}, b); delete c._localId; return c; }),
+      expenses: allExpenses.map(function(e){ var c = Object.assign({}, e); delete c._localId; return c; })
     };
     saveFile("surebet-tracker-backup-" + todayStr() + ".json", "application/json", JSON.stringify(payload, null, 2));
   });
@@ -1796,17 +1959,21 @@
       try{ data = JSON.parse(reader.result); }catch(err){ toast("El archivo no es un backup JSON válido."); return; }
       var importedBets = Array.isArray(data.bets) ? data.bets : [];
       var importedBooks = Array.isArray(data.bookmakers) ? data.bookmakers : [];
-      if(importedBets.length === 0 && importedBooks.length === 0){ toast("El backup no tiene apuestas ni casas para importar."); return; }
-      if(!confirm("Se van a importar " + importedBets.length + " apuesta(s) y " + importedBooks.length + " casa(s). Los registros con el mismo id se actualizan; el resto se agrega. ¿Continuar?")) return;
+      var importedExpenses = Array.isArray(data.expenses) ? data.expenses : [];
+      if(importedBets.length === 0 && importedBooks.length === 0 && importedExpenses.length === 0){ toast("El backup no tiene apuestas, casas ni gastos para importar."); return; }
+      if(!confirm("Se van a importar " + importedBets.length + " apuesta(s), " + importedBooks.length + " casa(s) y " + importedExpenses.length + " gasto(s). Los registros con el mismo id se actualizan; el resto se agrega. ¿Continuar?")) return;
       if(db){
         importedBets.forEach(function(b){ upsertImported("bets", allBets, b); });
         importedBooks.forEach(function(b){ upsertImported("bookmakers", allBookmakers, b); });
+        importedExpenses.forEach(function(e){ upsertImported("expenses", allExpenses, e); });
       } else {
         withLocalBets(function(arr){ importedBets.forEach(function(b){ upsertImported("bets", arr, b); }); });
         withLocalBookmakers(function(arr){ importedBooks.forEach(function(b){ upsertImported("bookmakers", arr, b); }); });
+        withLocalExpenses(function(arr){ importedExpenses.forEach(function(e){ upsertImported("expenses", arr, e); }); });
       }
       renderLog();
       renderBookmakers();
+      renderExpenses();
       toast("Importación completada");
     };
     reader.readAsText(file);
@@ -1916,9 +2083,12 @@
     var enJuego = pending.reduce(function(s,b){ return s + b.totalStake; }, 0);
     var today = todayStr();
     var overdueCount = pending.filter(function(b){ return b.date && b.date < today; }).length;
+    var totalExpenses = allExpenses.reduce(function(s,e){ return s + (e.amount || 0); }, 0);
+    var realProfit = totalProfit - totalExpenses;
 
     var tiles = [
       {label:"Beneficio neto", value: fmtMoney(totalProfit), cls: totalProfit>=0?"pos":"neg"},
+      {label:"Ganancia real (después de gastos)", value: fmtMoney(realProfit), cls: realProfit>=0?"pos":"neg"},
       {label:"ROI sobre liquidadas", value: fmtPct(roi), cls: roi>=0?"pos":"neg"},
       {label:"Apostado (liquidado)", value: fmtMoney(totalStakedSettled), cls:""},
       {label:"En juego (pendiente)", value: fmtMoney(enJuego), cls:"", warn: overdueCount ? (overdueCount + " atrasada" + (overdueCount===1?"":"s") + " sin liquidar") : ""}
@@ -2215,8 +2385,10 @@
     try{ localStorage.removeItem("surebet-tracker:team-code"); }catch(e){}
     allBets = loadLocalJSON(STORAGE_KEYS.bets, []);
     allBookmakers = loadLocalJSON(STORAGE_KEYS.bookmakers, []);
+    allExpenses = loadLocalJSON(STORAGE_KEYS.expenses, []);
     renderLog();
     renderBookmakers();
+    renderExpenses();
     dbBannerEl.className = "db-banner info";
     dbBannerEl.style.display = "block";
     dbBannerEl.innerHTML = 'Modo local: tu historial se guarda en este navegador (localStorage). Usá "Exportar backup (JSON)" cada tanto para tener una copia — por ejemplo, en esta misma carpeta. Para sincronizar entre dispositivos y usar el análisis de fotos con IA, abrí la <a href="' + ARTIFACT_URL + '" target="_blank" rel="noopener">versión en la nube</a>.';
@@ -2259,6 +2431,22 @@
           dbBannerEl.className = "db-banner";
           dbBannerEl.style.display = "block";
           dbBannerEl.textContent = "Error de sincronización de casas: " + (err && err.message ? err.message : "desconocido");
+        }
+      );
+      db.collection("expenses").orderBy("createdAt","desc").limit(500).onSnapshot(
+        function(snap){
+          allExpenses = snap.docs.map(function(d){
+            var data = d.data() || {};
+            data.id = d.id;
+            return data;
+          });
+          renderExpenses();
+          renderStats();
+        },
+        function(err){
+          dbBannerEl.className = "db-banner";
+          dbBannerEl.style.display = "block";
+          dbBannerEl.textContent = "Error de sincronización de gastos: " + (err && err.message ? err.message : "desconocido");
         }
       );
     }).catch(function(){
