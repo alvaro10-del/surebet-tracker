@@ -603,6 +603,8 @@
       <p class="card-hint">Registrá en qué casas tenés cuenta, su estado y notas. Las que coincidan por nombre con las de tus apuestas van a mostrar un indicador de estado en "Capital comprometido por casa", en Registro. Si cargás un límite de stake, la calculadora te avisa si un cálculo lo supera.</p>
       <div class="toolbar-row">
         <button class="btn btn-sm btn-accent" id="addBookmakerBtn">+ Agregar casa</button>
+        <div class="toolbar-spacer"></div>
+        <span class="toolbar-hint" id="bookmakersTotalHint"></span>
       </div>
       <div class="table-wrap">
         <table id="bookmakersTable">
@@ -1811,13 +1813,19 @@
   function renderBookmakers(){
     var tbody = document.getElementById("bookmakersTableBody");
     var empty = document.getElementById("bookmakersEmpty");
+    var totalHint = document.getElementById("bookmakersTotalHint");
     if(allBookmakers.length === 0){
       tbody.innerHTML = "";
       empty.style.display = "block";
+      if(totalHint) totalHint.textContent = "";
       renderBookExposure();
       return;
     }
     empty.style.display = "none";
+    if(totalHint){
+      var totalBalance = allBookmakers.reduce(function(s,b){ return s + (b.balance || 0); }, 0);
+      totalHint.textContent = "Total en todas las casas: " + fmtMoney(totalBalance);
+    }
     tbody.innerHTML = allBookmakers.map(function(b){
       var id = b.id || b._localId;
       return '<tr data-id="'+escapeHtml(id)+'">' +
@@ -1854,6 +1862,13 @@
     commitBookmakerField(tr.dataset.id, input.dataset.field, value);
     if(input.dataset.field === "name" || input.dataset.field === "status") renderBookExposure();
     if(input.dataset.field === "name" || input.dataset.field === "stakeLimit") compute();
+    if(input.dataset.field === "balance"){
+      var totalHint = document.getElementById("bookmakersTotalHint");
+      if(totalHint){
+        var totalBalance = allBookmakers.reduce(function(s,b){ return s + (b.balance || 0); }, 0);
+        totalHint.textContent = "Total en todas las casas: " + fmtMoney(totalBalance);
+      }
+    }
   });
   bookmakersTableBody.addEventListener("click", function(e){
     var btn = e.target.closest("[data-action='delete-bookmaker']");
