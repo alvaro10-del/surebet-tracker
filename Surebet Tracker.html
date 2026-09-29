@@ -578,6 +578,10 @@
   <!-- REGISTRO -->
   <section id="tab-log" class="tab-panel">
     <div class="stats-grid" id="statsGrid"></div>
+    <div class="toolbar-row" style="margin-top:-6px;">
+      <button class="btn btn-sm" id="quickLossBtn" title="Para pagos anticipados, cuotas que cambiaron, eventos caídos, etc.">+ Anotar pérdida / pago anticipado</button>
+      <span class="type-tag">Se guarda en Gastos y descuenta de "Ganancia real"</span>
+    </div>
 
     <div class="card">
       <div class="cal-header">
@@ -2428,8 +2432,8 @@
   });
 
   // ---------- Gastos (4x1000, suscripciones, pérdidas por apuestas rotas) ----------
-  function addExpenseRow(){
-    var rec = {date: todayStr(), description:"", category: EXPENSE_CATEGORIES[0], amount: 0, createdAt: Date.now()};
+  function addExpenseRow(presetCategory){
+    var rec = {date: todayStr(), description:"", category: presetCategory || EXPENSE_CATEGORIES[0], amount: 0, createdAt: Date.now()};
     if(db){
       db.collection("expenses").add(rec).catch(function(err){
         toast("No se pudo agregar el gasto: " + (err && err.message ? err.message : "error"));
@@ -2441,7 +2445,17 @@
       renderStats();
     }
   }
-  document.getElementById("addExpenseBtn").addEventListener("click", addExpenseRow);
+  document.getElementById("addExpenseBtn").addEventListener("click", function(){ addExpenseRow(); });
+
+  document.getElementById("quickLossBtn").addEventListener("click", function(){
+    document.querySelector('.tab-btn[data-tab="expenses"]').click();
+    addExpenseRow("Pérdida por apuesta rota");
+    setTimeout(function(){
+      var firstRow = document.querySelector("#expensesTableBody tr");
+      var descInput = firstRow && firstRow.querySelector('[data-field="description"]');
+      if(descInput){ descInput.scrollIntoView({behavior:"smooth", block:"center"}); descInput.focus(); }
+    }, 50);
+  });
 
   function commitExpenseField(id, field, value){
     if(db){
