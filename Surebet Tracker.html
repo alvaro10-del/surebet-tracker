@@ -1337,6 +1337,11 @@
     document.getElementById("photoResults").innerHTML = "";
     document.getElementById("dailyPlanCard").style.display = "none";
 
+    var MONTHS_ES = ["ene","feb","mar","abr","may","jun","jul","ago","sep","oct","nov","dic"];
+    var nowD = new Date();
+    var nowLabel = nowD.getDate() + " " + MONTHS_ES[nowD.getMonth()] + " " + nowD.getFullYear() + ", " +
+      ("0"+nowD.getHours()).slice(-2) + ":" + ("0"+nowD.getMinutes()).slice(-2);
+
     var modeNote = marketTiming === "prematch"
       ? "Esta app por ahora solo procesa mercados PREPARTIDO (pre-match) — antes de que arranque el evento, con hora/fecha fija. " +
         "Si una fila o captura muestra que el evento ya está EN VIVO (reloj corriendo, marcador en tiempo real, tiempo transcurrido " +
@@ -1368,10 +1373,13 @@
       "escribí el nombre completo en \"market\"), la lista de casas con su cuota decimal, y si la herramienta muestra un % de " +
       "ganancia/ROI para esa fila (como \"0,99%\" a la izquierda) devolvelo en \"displayedPct\" como número (0.99), o null si no " +
       "se ve ninguno.\n" +
-      "2b. Buscá también el indicador de cuánto falta para que arranque el evento (normalmente un relojito con texto tipo " +
-      "\"34 minutos\", \"2 horas\", \"19 horas\", \"3 días\"). Devolvé ese texto tal cual en \"timeLabel\", y tu mejor estimación en " +
-      "horas como número en \"hoursUntil\" (ej: \"34 minutos\" → 0.57, \"2 horas\" → 2, \"19 horas\" → 19, \"3 días\" → 72). Si no " +
-      "se ve ningún indicador de tiempo, poné ambos en null — no inventes un valor.\n" +
+      "2b. Buscá también la FECHA Y HORA real de arranque del evento (normalmente al lado del nombre de cada casa, tipo " +
+      "\"29 sep 11:00\" o \"04 oct 12:00\"). OJO: esto NO es el relojito/contador que a veces aparece más arriba en la fila " +
+      "(ese suele mostrar otra cosa, como hace cuánto se detectó la oportunidad, no cuándo es el partido) — usá la fecha/hora " +
+      "explícita del evento, no ese contador. Ahora mismo son " + nowLabel + " (hora de Colombia). Con eso, calculá cuántas " +
+      "horas faltan desde ahora hasta esa fecha/hora del evento (si la fecha ya pasó este año, asumí que es del año que viene) " +
+      "y devolvé ese número en \"hoursUntil\", y la fecha/hora tal cual la viste (ej: \"29 sep 11:00\") en \"timeLabel\". Si " +
+      "ninguna imagen/texto trae fecha/hora del evento, poné ambos en null — no inventes un valor.\n" +
       "3. Escribí una explicación EJECUTABLE para alguien que recién está aprendiendo a hacer arbitraje deportivo — no sabe qué " +
       "significan términos como \"cobertura\", \"margen\", \"hándicap asiático\" o \"probabilidad implícita\" salvo que se los " +
       "expliques ahí mismo, en la misma explicación, con palabras simples y un ejemplo concreto (no en una frase aparte ni dando " +
