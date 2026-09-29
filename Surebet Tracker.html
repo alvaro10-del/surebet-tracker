@@ -559,7 +559,7 @@
 
     <div class="card" id="dailyPlanCard" style="display:none;">
       <h2 class="card-title" style="font-size:17px;">Plan de arbitrajes de hoy</h2>
-      <p class="card-hint">Con las oportunidades que acabás de analizar y el saldo <strong>disponible</strong> de cada casa (Casas → Disponible), arma una selección para llegar a tu meta de ganancia, priorizando las de mejor %. No descuenta 4x1000 ni otros gastos — para ver la ganancia después de eso, mirá "Ganancia real" en Registro.</p>
+      <p class="card-hint">Con las oportunidades que acabás de analizar y el saldo <strong>disponible</strong> de cada casa (Casas → Disponible), arma una selección para llegar a tu meta de ganancia esperada. Prioriza las que arrancan (y por lo tanto se liquidan) más pronto, para recuperar el capital rápido y no dejarlo parado más de 7 días — no incluye las que empiezan en más de una semana ni las que ya están en vivo. No descuenta 4x1000 ni otros gastos — para ver la ganancia después de eso, mirá "Ganancia real" en Registro.</p>
       <div class="field-row">
         <div class="field" style="flex:0 0 220px;">
           <label for="dailyGoalInput">Meta mínima de ganancia hoy</label>
@@ -1296,6 +1296,7 @@
         '<div class="opp-header">' +
           '<div><strong>' + escapeHtml(opp.event || "Evento sin nombre") + '</strong>' +
             (opp.market ? ' <span class="type-tag">· ' + escapeHtml(opp.market) + '</span>' : '') +
+            (opp.timeLabel ? ' <span class="type-tag">· empieza en ' + escapeHtml(opp.timeLabel) + '</span>' : '') +
           '</div>' +
           '<span class="badge-mini ' + badgeCls + '">' + badgeText + '</span>' +
         '</div>' +
@@ -1367,6 +1368,10 @@
       "escribí el nombre completo en \"market\"), la lista de casas con su cuota decimal, y si la herramienta muestra un % de " +
       "ganancia/ROI para esa fila (como \"0,99%\" a la izquierda) devolvelo en \"displayedPct\" como número (0.99), o null si no " +
       "se ve ninguno.\n" +
+      "2b. Buscá también el indicador de cuánto falta para que arranque el evento (normalmente un relojito con texto tipo " +
+      "\"34 minutos\", \"2 horas\", \"19 horas\", \"3 días\"). Devolvé ese texto tal cual en \"timeLabel\", y tu mejor estimación en " +
+      "horas como número en \"hoursUntil\" (ej: \"34 minutos\" → 0.57, \"2 horas\" → 2, \"19 horas\" → 19, \"3 días\" → 72). Si no " +
+      "se ve ningún indicador de tiempo, poné ambos en null — no inventes un valor.\n" +
       "3. Escribí una explicación EJECUTABLE para alguien que recién está aprendiendo a hacer arbitraje deportivo — no sabe qué " +
       "significan términos como \"cobertura\", \"margen\", \"hándicap asiático\" o \"probabilidad implícita\" salvo que se los " +
       "expliques ahí mismo, en la misma explicación, con palabras simples y un ejemplo concreto (no en una frase aparte ni dando " +
@@ -1383,7 +1388,7 @@
       "en los segundos que tardás en pasar de una casa a la otra — si eso pasa, no confirmes la segunda apuesta con una cuota peor, " +
       "recalculá antes\"). Nunca uses una palabra técnica sin explicarla la primera vez que aparece en el texto.\n\n" +
       "Respondé con SOLO un JSON con esta forma exacta, sin texto adicional:\n" +
-      '{"opportunities": [{"event": "string", "market": "string", "displayedPct": 0.99, "live": false, "legs": [{"bookmaker": "string", "outcome": "string", "odds": 2.05}], "explanation": "string"}], "notes": "string opcional, solo si algo no se pudo leer bien"}\n\n' +
+      '{"opportunities": [{"event": "string", "market": "string", "displayedPct": 0.99, "live": false, "timeLabel": "string o null", "hoursUntil": 2.5, "legs": [{"bookmaker": "string", "outcome": "string", "odds": 2.05}], "explanation": "string"}], "notes": "string opcional, solo si algo no se pudo leer bien"}\n\n' +
       "Las cuotas deben ser números decimales, nunca fraccionarias ni americanas. Si NINGUNA combinación de cuotas de la imagen da " +
       "arbitraje real (suma de probabilidades implícitas menor a 1 en algún mercado), devolvé \"opportunities\": [] — pero en " +
       "\"notes\" no te quedes solo en el motivo: mostrá igual, con la MEJOR combinación que encontraste (la que dio la suma más " +
@@ -1413,12 +1418,15 @@
           };
         }).filter(function(l){ return l.bookmaker && l.odds > 1; });
         var displayedPct = Number(o && o.displayedPct);
+        var hoursUntil = Number(o && o.hoursUntil);
         return {
           event: String((o && o.event) || "").trim(),
           market: String((o && o.market) || "").trim(),
           explanation: String((o && o.explanation) || "").trim(),
           displayedPct: isFinite(displayedPct) ? displayedPct : null,
           live: !!(o && o.live),
+          timeLabel: (o && o.timeLabel) ? String(o.timeLabel).trim() : "",
+          hoursUntil: isFinite(hoursUntil) ? hoursUntil : null,
           legs: oLegs
         };
       }).filter(function(o){ return o.legs.length >= 1; });
@@ -1496,6 +1504,10 @@
   // ---------- Plan de arbitrajes de hoy (arma una selección con el capital disponible real) ----------
   var lastPlan = null;
 
+  // Betburger's paid plans run in 7-day cycles — money parked in an event further out than
+  // that risks sitting there past the current cycle, so it's kept out of the automatic plan.
+  var MAX_HOURS_UNTIL = 168;
+
   function buildDailyPlan(goalAmount){
     var available = {};
     allBookmakers.forEach(function(b){
@@ -1521,8 +1533,16 @@
     var excluded = [];
     var runningProfit = 0;
 
+    // Orden por liquidez: primero las que arrancan (y por lo tanto se liquidan) más pronto, para
+    // recuperar capital + ganancia rápido y no dejarlo parado más de un ciclo de Betburger. Entre
+    // dos con tiempo similar, gana la de mejor %. Las que no traen dato de tiempo van al final.
     candidates.filter(function(c){ return c.isSurebet; })
-      .sort(function(a,b){ return b.profitPct - a.profitPct; })
+      .sort(function(a,b){
+        var ha = a.opp.hoursUntil == null ? Infinity : a.opp.hoursUntil;
+        var hb = b.opp.hoursUntil == null ? Infinity : b.opp.hoursUntil;
+        if(ha !== hb) return ha - hb;
+        return b.profitPct - a.profitPct;
+      })
       .forEach(function(c){
         if(runningProfit >= goalAmount){
           excluded.push({opp: c.opp, reason: "La meta ya se alcanza con otras oportunidades mejores — esta queda de reserva."});
@@ -1530,6 +1550,10 @@
         }
         if(c.opp.live){
           excluded.push({opp: c.opp, reason: "Está EN VIVO — las cuotas cambian todo el tiempo, no se incluye en el plan automático."});
+          return;
+        }
+        if(c.opp.hoursUntil != null && c.opp.hoursUntil > MAX_HOURS_UNTIL){
+          excluded.push({opp: c.opp, reason: "Empieza en más de 7 días — dejaría el capital parado más de un ciclo de Betburger, no se incluye en el plan automático."});
           return;
         }
         var weights = [];
@@ -1583,7 +1607,8 @@
         runningProfit += minProfit;
         picks.push({
           event: c.opp.event, market: c.opp.market, legs: pickLegs, totalStake: actualTotal,
-          expectedProfit: minProfit, profitPct: c.profitPct, impliedSum: c.impliedSum
+          expectedProfit: minProfit, profitPct: c.profitPct, impliedSum: c.impliedSum,
+          timeLabel: c.opp.timeLabel || "", hoursUntil: c.opp.hoursUntil
         });
       });
 
@@ -1691,11 +1716,12 @@
             '<div class="opp-header">' +
               '<div><strong>' + escapeHtml(pick.event || "Evento sin nombre") + '</strong>' +
                 (pick.market ? ' <span class="type-tag">· ' + escapeHtml(pick.market) + '</span>' : '') +
+                (pick.timeLabel ? ' <span class="type-tag">· empieza en ' + escapeHtml(pick.timeLabel) + '</span>' : '') +
               '</div>' +
-              '<span class="badge-mini yes">+' + fmtMoney(pick.expectedProfit) + '</span>' +
+              '<span class="badge-mini yes" title="Ganancia esperada una vez que se liquide">+' + fmtMoney(pick.expectedProfit) + '</span>' +
             '</div>' +
             '<div class="opp-legs type-tag">' + legsList + '</div>' +
-            '<div class="type-tag">Invertís ' + fmtMoney(pick.totalStake) + ' en total, ganancia garantizada ' + fmtMoney(pick.expectedProfit) + ' (' + fmtPct(pick.profitPct) + ').</div>' +
+            '<div class="type-tag">Invertís ' + fmtMoney(pick.totalStake) + ' en total, ganancia esperada al liquidarse ' + fmtMoney(pick.expectedProfit) + ' (' + fmtPct(pick.profitPct) + ').</div>' +
           '</div>' +
           '<button class="btn btn-sm btn-accent" data-save-pick="' + i + '">Guardar en registro</button>' +
         '</div>';
