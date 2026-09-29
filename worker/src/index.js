@@ -234,11 +234,14 @@ async function handleAnalyze(request, env) {
     "text tail:", JSON.stringify(text.slice(-300))
   );
 
-  if (!text) {
-    return json({ error: "empty_completion" }, 502, env);
-  }
+  // Check truncation first: an empty `text` with stop_reason "max_tokens" means the whole budget
+  // went to thinking before any output — that's a truncation, not a generic empty-completion case,
+  // and the two get different user-facing messages.
   if (data.stop_reason === "max_tokens") {
     return json({ error: "truncated", text }, 502, env);
+  }
+  if (!text) {
+    return json({ error: "empty_completion" }, 502, env);
   }
   return json({ text }, 200, env);
 }

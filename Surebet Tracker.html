@@ -738,6 +738,27 @@
     return d.getFullYear() + "-" + m + "-" + day;
   }
   function uid(){ return Math.random().toString(36).slice(2,10) + Date.now().toString(36); }
+
+  var MONTHS_ES = ["ene","feb","mar","abr","may","jun","jul","ago","sep","oct","nov","dic"];
+  var MONTHS_ES_ALT = {"ene":0,"feb":1,"mar":2,"abr":3,"may":4,"jun":5,"jul":6,"ago":7,"sep":8,"set":8,"oct":9,"nov":10,"dic":11};
+  // Parses a label like "29 sep 11:00" or "04 oct 12:00" (the format the AI is asked to copy
+  // verbatim from the event date shown in the source) into hours from now — done in JS, not by
+  // the AI, so the liquidity sort never depends on the model's date arithmetic.
+  function parseEventHoursUntil(label){
+    if(!label) return null;
+    var m = String(label).toLowerCase().match(/(\d{1,2})\s*([a-zñ]{3,4})\.?\s+(\d{1,2}):(\d{2})/);
+    if(!m) return null;
+    var monIdx = MONTHS_ES_ALT[m[2].slice(0,3)];
+    if(monIdx == null) return null;
+    var day = parseInt(m[1],10), hour = parseInt(m[3],10), min = parseInt(m[4],10);
+    var now = new Date();
+    var candidate = new Date(now.getFullYear(), monIdx, day, hour, min);
+    if(candidate.getTime() < now.getTime() - 24*60*60*1000){
+      candidate = new Date(now.getFullYear()+1, monIdx, day, hour, min);
+    }
+    var diffH = (candidate.getTime() - now.getTime()) / 3600000;
+    return isFinite(diffH) ? diffH : null;
+  }
   function toast(msg){
     var region = document.getElementById("toastRegion");
     var el = document.createElement("div");
@@ -1620,11 +1641,6 @@
     document.getElementById("photoResults").innerHTML = "";
     document.getElementById("dailyPlanCard").style.display = "none";
 
-    var MONTHS_ES = ["ene","feb","mar","abr","may","jun","jul","ago","sep","oct","nov","dic"];
-    var nowD = new Date();
-    var nowLabel = nowD.getDate() + " " + MONTHS_ES[nowD.getMonth()] + " " + nowD.getFullYear() + ", " +
-      ("0"+nowD.getHours()).slice(-2) + ":" + ("0"+nowD.getMinutes()).slice(-2);
-
     var modeNote = marketTiming === "prematch"
       ? "Esta app por ahora solo procesa mercados PREPARTIDO (pre-match) — antes de que arranque el evento, con hora/fecha fija. " +
         "Si una fila o captura muestra que el evento ya está EN VIVO (reloj corriendo, marcador en tiempo real, tiempo transcurrido " +
@@ -1656,13 +1672,11 @@
       "escribí el nombre completo en \"market\"), la lista de casas con su cuota decimal, y si la herramienta muestra un % de " +
       "ganancia/ROI para esa fila (como \"0,99%\" a la izquierda) devolvelo en \"displayedPct\" como número (0.99), o null si no " +
       "se ve ninguno.\n" +
-      "2b. Buscá también la FECHA Y HORA real de arranque del evento (normalmente al lado del nombre de cada casa, tipo " +
-      "\"29 sep 11:00\" o \"04 oct 12:00\"). OJO: esto NO es el relojito/contador que a veces aparece más arriba en la fila " +
-      "(ese suele mostrar otra cosa, como hace cuánto se detectó la oportunidad, no cuándo es el partido) — usá la fecha/hora " +
-      "explícita del evento, no ese contador. Ahora mismo son " + nowLabel + " (hora de Colombia). Con eso, calculá cuántas " +
-      "horas faltan desde ahora hasta esa fecha/hora del evento (si la fecha ya pasó este año, asumí que es del año que viene) " +
-      "y devolvé ese número en \"hoursUntil\", y la fecha/hora tal cual la viste (ej: \"29 sep 11:00\") en \"timeLabel\". Si " +
-      "ninguna imagen/texto trae fecha/hora del evento, poné ambos en null — no inventes un valor.\n" +
+      "2b. Copiá también la FECHA Y HORA real de arranque del evento tal cual la veas, en formato \"D mon HH:MM\" (ej: " +
+      "\"29 sep 11:00\", \"4 oct 12:00\") en \"timeLabel\" — normalmente está al lado del nombre de cada casa. OJO: esto NO es " +
+      "el relojito/contador que a veces aparece más arriba en la fila (ese suele mostrar otra cosa, no cuándo es el partido) — " +
+      "copiá la fecha/hora explícita del evento, no ese contador. No hace falta que calcules nada con esa fecha, solo copiala. " +
+      "Si no la ves, poné \"timeLabel\": null.\n" +
       "3. Escribí una explicación EJECUTABLE para alguien que recién está aprendiendo a hacer arbitraje deportivo — no sabe qué " +
       "significan términos como \"cobertura\", \"margen\", \"hándicap asiático\" o \"probabilidad implícita\" salvo que se los " +
       "expliques ahí mismo, en la misma explicación, con palabras simples y un ejemplo concreto (no en una frase aparte ni dando " +
@@ -1679,7 +1693,7 @@
       "en los segundos que tardás en pasar de una casa a la otra — si eso pasa, no confirmes la segunda apuesta con una cuota peor, " +
       "recalculá antes\"). Nunca uses una palabra técnica sin explicarla la primera vez que aparece en el texto.\n\n" +
       "Respondé con SOLO un JSON con esta forma exacta, sin texto adicional:\n" +
-      '{"opportunities": [{"event": "string", "market": "string", "displayedPct": 0.99, "live": false, "timeLabel": "string o null", "hoursUntil": 2.5, "legs": [{"bookmaker": "string", "outcome": "string", "odds": 2.05}], "explanation": "string"}], "notes": "string opcional, solo si algo no se pudo leer bien"}\n\n' +
+      '{"opportunities": [{"event": "string", "market": "string", "displayedPct": 0.99, "live": false, "timeLabel": "string o null", "legs": [{"bookmaker": "string", "outcome": "string", "odds": 2.05}], "explanation": "string"}], "notes": "string opcional, solo si algo no se pudo leer bien"}\n\n' +
       "Las cuotas deben ser números decimales, nunca fraccionarias ni americanas. Si NINGUNA combinación de cuotas de la imagen da " +
       "arbitraje real (suma de probabilidades implícitas menor a 1 en algún mercado), devolvé \"opportunities\": [] — pero en " +
       "\"notes\" no te quedes solo en el motivo: mostrá igual, con la MEJOR combinación que encontraste (la que dio la suma más " +
@@ -1709,15 +1723,15 @@
           };
         }).filter(function(l){ return l.bookmaker && l.odds > 1; });
         var displayedPct = Number(o && o.displayedPct);
-        var hoursUntil = Number(o && o.hoursUntil);
+        var timeLabel = (o && o.timeLabel) ? String(o.timeLabel).trim() : "";
         return {
           event: String((o && o.event) || "").trim(),
           market: String((o && o.market) || "").trim(),
           explanation: String((o && o.explanation) || "").trim(),
           displayedPct: isFinite(displayedPct) ? displayedPct : null,
           live: !!(o && o.live),
-          timeLabel: (o && o.timeLabel) ? String(o.timeLabel).trim() : "",
-          hoursUntil: isFinite(hoursUntil) ? hoursUntil : null,
+          timeLabel: timeLabel,
+          hoursUntil: parseEventHoursUntil(timeLabel),
           legs: oLegs
         };
       }).filter(function(o){ return o.legs.length >= 1; });
