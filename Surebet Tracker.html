@@ -630,6 +630,28 @@
 
   <!-- CASAS DE APUESTAS -->
   <section id="tab-books" class="tab-panel">
+    <div class="card photo-card" id="bmPhotoCard">
+      <h3 class="card-title" style="font-size:17px;">Cargar casas desde una foto</h3>
+      <p class="card-hint">Subí o pegá una captura del saldo de una casa, o de tu propia lista (notas, planilla, captura) con varias casas y sus saldos. Claude la organiza abajo — revisá antes de agregarla a la tabla.</p>
+      <div class="photo-avail" id="bmPhotoAvailStatus">Verificando si esta vista admite analizar imágenes con Claude…</div>
+      <div class="photo-upload-ui" id="bmPhotoUploadUI" style="display:none;">
+        <div class="photo-row">
+          <div class="photo-thumbs" id="bmPhotoThumbs"></div>
+          <div class="photo-controls">
+            <input type="file" id="bmPhotoInput" accept="image/*" multiple hidden>
+            <span class="photo-note">Tip: con esta pestaña abierta, pegá la captura directo con Ctrl+V (Cmd+V en Mac).</span>
+            <button class="btn btn-sm btn-accent" id="analyzeBmPhotoBtn" disabled>Analizar con Claude</button>
+            <span class="photo-status" id="bmPhotoStatus"></span>
+          </div>
+        </div>
+        <div class="field" style="margin-top:10px;">
+          <label for="bmTextInput">O pegá acá el texto de tu lista (nombre y saldo de cada casa)</label>
+          <textarea id="bmTextInput" class="bm-input" rows="3" placeholder="Ej: 1win 2.000.000, Rushbet 500.000, Codere sin saldo, cuenta cerrada..." style="width:100%; font-family:'IBM Plex Mono'; font-size:12px; resize:vertical;"></textarea>
+        </div>
+        <div id="bmPhotoResults"></div>
+      </div>
+    </div>
+
     <div class="card">
       <h3 class="card-title" style="font-size:17px;">Casas de apuestas</h3>
       <p class="card-hint">Registrá en qué casas tenés cuenta, cuánto aportaste, el saldo actual y su estado. "En juego" se calcula solo de tus apuestas pendientes en esa casa, y "Disponible" es lo que podrías retirar hoy (saldo actual menos lo que está en juego). Si cargás un límite de stake, la calculadora te avisa si un cálculo lo supera.</p>
@@ -1010,11 +1032,15 @@
   var selectedPhotoFiles = [];
   var lastOpportunities = [];
   var chatHistory = [];
+  var selectedBmPhotoFiles = [];
 
   function setPhotoAvail(msg, warn){
-    var el = document.getElementById("photoAvailStatus");
-    el.textContent = msg;
-    el.classList.toggle("warn", !!warn);
+    ["photoAvailStatus", "bmPhotoAvailStatus"].forEach(function(id){
+      var el = document.getElementById(id);
+      if(!el) return;
+      el.textContent = msg;
+      el.classList.toggle("warn", !!warn);
+    });
   }
 
   function showPhotoUpload(caps){
@@ -1025,6 +1051,13 @@
       document.getElementById("photoInput").setAttribute("accept", caps.mediaTypes.join(","));
     }
     renderPhotoThumbs();
+
+    document.getElementById("bmPhotoAvailStatus").style.display = "none";
+    document.getElementById("bmPhotoUploadUI").style.display = "block";
+    if(caps.mediaTypes && caps.mediaTypes.length){
+      document.getElementById("bmPhotoInput").setAttribute("accept", caps.mediaTypes.join(","));
+    }
+    renderBmPhotoThumbs();
   }
 
   function tryWorkerFallback(reasonPrefix){
@@ -1183,6 +1216,200 @@
     e.target.value = "";
   });
 
+  function renderBmPhotoThumbs(){
+    var wrap = document.getElementById("bmPhotoThumbs");
+    var html = selectedBmPhotoFiles.map(function(f, i){
+      return '<div class="photo-thumb"><img src="'+URL.createObjectURL(f)+'" alt="Captura '+(i+1)+'">' +
+        '<button class="photo-thumb-remove" data-i="'+i+'" title="Quitar">&times;</button></div>';
+    }).join("");
+    html += '<button class="photo-add-tile" id="addBmPhotoTile" title="Agregar captura">+</button>';
+    wrap.innerHTML = html;
+    wrap.querySelectorAll(".photo-thumb-remove").forEach(function(btn){
+      btn.addEventListener("click", function(){
+        selectedBmPhotoFiles.splice(+btn.dataset.i, 1);
+        renderBmPhotoThumbs();
+      });
+    });
+    document.getElementById("addBmPhotoTile").addEventListener("click", function(){
+      document.getElementById("bmPhotoInput").click();
+    });
+    updateAnalyzeBmBtnState();
+  }
+
+  function updateAnalyzeBmBtnState(){
+    var text = document.getElementById("bmTextInput").value.trim();
+    document.getElementById("analyzeBmPhotoBtn").disabled = selectedBmPhotoFiles.length === 0 && text.length === 0;
+  }
+  document.getElementById("bmTextInput").addEventListener("input", updateAnalyzeBmBtnState);
+
+  function addBmPhotoFiles(fileList){
+    var arr = Array.prototype.filter.call(fileList, function(f){ return f && f.type && f.type.indexOf("image") === 0; });
+    if(arr.length === 0) return;
+    var maxCount = (sampleImageCaps && sampleImageCaps.maxCount) || 10;
+    selectedBmPhotoFiles = selectedBmPhotoFiles.concat(arr);
+    if(selectedBmPhotoFiles.length > maxCount){
+      selectedBmPhotoFiles = selectedBmPhotoFiles.slice(0, maxCount);
+      toast("Se tomaron las primeras " + maxCount + " imágenes (límite de esta vista).");
+    }
+    renderBmPhotoThumbs();
+    document.getElementById("bmPhotoStatus").textContent = "";
+  }
+
+  document.getElementById("bmPhotoInput").addEventListener("change", function(e){
+    addBmPhotoFiles(e.target.files);
+    e.target.value = "";
+  });
+
+  // ---------- Cargar casas desde foto/texto (misma IA, prompt distinto: nombre + saldo + estado) ----------
+  var lastParsedBookmakers = [];
+
+  function upsertBookmakerByName(rec){
+    var nameKey = (rec.name || "").trim().toLowerCase();
+    if(!nameKey) return;
+    if(db){
+      var existing = allBookmakers.find(function(b){ return (b.name||"").trim().toLowerCase() === nameKey; });
+      if(existing && existing.id){
+        var patch = {};
+        if(rec.balance != null) patch.balance = rec.balance;
+        if(rec.status) patch.status = rec.status;
+        if(rec.notes) patch.notes = rec.notes;
+        db.doc("bookmakers/" + existing.id).update(patch).catch(function(err){
+          toast("No se pudo actualizar " + rec.name + ": " + (err && err.message ? err.message : "error"));
+        });
+      } else {
+        db.collection("bookmakers").add({
+          name: rec.name, status: rec.status || "activa", contributed: 0,
+          balance: rec.balance != null ? rec.balance : 0, notes: rec.notes || "", createdAt: Date.now()
+        }).catch(function(err){
+          toast("No se pudo agregar " + rec.name + ": " + (err && err.message ? err.message : "error"));
+        });
+      }
+    } else {
+      withLocalBookmakers(function(arr){
+        var existing = arr.find(function(b){ return (b.name||"").trim().toLowerCase() === nameKey; });
+        if(existing){
+          if(rec.balance != null) existing.balance = rec.balance;
+          if(rec.status) existing.status = rec.status;
+          if(rec.notes) existing.notes = rec.notes;
+        } else {
+          arr.unshift({
+            name: rec.name, status: rec.status || "activa", contributed: 0,
+            balance: rec.balance != null ? rec.balance : 0, notes: rec.notes || "",
+            createdAt: Date.now(), _localId: uid()
+          });
+        }
+      });
+      renderBookmakers();
+    }
+  }
+
+  function renderBmPhotoResults(rows, notes){
+    lastParsedBookmakers = rows;
+    var el = document.getElementById("bmPhotoResults");
+    if(rows.length === 0){
+      el.innerHTML = '<div class="photo-note-block">' + (notes ? escapeHtml(notes) : "No pude identificar casas de apuestas ahí.") + '</div>';
+      return;
+    }
+    var html = notes ? '<div class="photo-note-block">' + escapeHtml(notes) + '</div>' : '';
+    html += rows.map(function(r, i){
+      var existing = allBookmakers.find(function(b){ return (b.name||"").trim().toLowerCase() === r.name.trim().toLowerCase(); });
+      return '<div class="opp-card">' +
+        '<label class="plan-check-row"><input type="checkbox" class="bm-pick-check" data-i="' + i + '" checked> Incluir</label>' +
+        '<div class="opp-header"><div><strong>' + escapeHtml(r.name) + '</strong>' +
+          (existing ? ' <span class="type-tag">· ya existe, se actualiza</span>' : ' <span class="type-tag">· casa nueva</span>') +
+        '</div></div>' +
+        '<div class="type-tag">Saldo: <strong>' + (r.balance != null ? fmtMoney(r.balance) : "sin dato") + '</strong> · Estado: ' +
+          (BOOKMAKER_STATUSES[r.status] || r.status) + (r.notes ? ' · ' + escapeHtml(r.notes) : '') + '</div>' +
+      '</div>';
+    }).join("");
+    html += '<button class="btn btn-sm btn-accent" id="commitBmPhotoBtn" style="margin-top:10px;">Agregar/actualizar en Casas</button>';
+    el.innerHTML = html;
+    document.getElementById("commitBmPhotoBtn").addEventListener("click", function(){
+      var count = 0;
+      el.querySelectorAll(".bm-pick-check").forEach(function(cb){
+        if(!cb.checked) return;
+        var r = lastParsedBookmakers[+cb.dataset.i];
+        if(!r) return;
+        upsertBookmakerByName(r);
+        count++;
+      });
+      toast(count + " casa" + (count===1?"":"s") + " agregada" + (count===1?"":"s") + "/actualizada" + (count===1?"":"s"));
+      el.innerHTML = "";
+      selectedBmPhotoFiles = [];
+      renderBmPhotoThumbs();
+      document.getElementById("bmTextInput").value = "";
+      updateAnalyzeBmBtnState();
+    });
+  }
+
+  document.getElementById("analyzeBmPhotoBtn").addEventListener("click", function(){
+    var pastedBmText = document.getElementById("bmTextInput").value.trim();
+    if(!activeProvider || (selectedBmPhotoFiles.length === 0 && !pastedBmText)) return;
+    var btn = document.getElementById("analyzeBmPhotoBtn");
+    var status = document.getElementById("bmPhotoStatus");
+    btn.disabled = true;
+    status.style.color = "var(--text-muted)";
+    var parts = [];
+    if(selectedBmPhotoFiles.length) parts.push(selectedBmPhotoFiles.length + " imagen" + (selectedBmPhotoFiles.length===1?"":"es"));
+    if(pastedBmText) parts.push("el texto pegado");
+    status.textContent = "Analizando " + parts.join(" y ") + "...";
+    document.getElementById("bmPhotoResults").innerHTML = "";
+
+    var textBlock = pastedBmText
+      ? "\n\nEl usuario pegó este texto con su lista de casas:\n---\n" + pastedBmText + "\n---\n"
+      : "";
+
+    var prompt = "Esto es sobre casas de apuestas: puede ser una captura del saldo dentro de la app de una casa (mostrando el " +
+      "nombre y el monto disponible), o una lista propia del usuario (notas, planilla, captura de una app de notas) con varias " +
+      "casas y sus saldos." + textBlock + "\n\n" +
+      "Extraé cada casa que identifiques, con:\n" +
+      "- \"name\": el nombre de la casa (ej: 1win, Betplay, Rushbet).\n" +
+      "- \"balance\": el saldo disponible como número entero en pesos colombianos (COP), sin puntos ni separadores (ej: " +
+      "\"$2.000.000\" o \"2.000.000 COP\" → 2000000). Si no hay un monto claro para esa casa, poné null — no inventes uno.\n" +
+      "- \"status\": \"activa\", \"limitada\" o \"cerrada\" SOLO si el texto/imagen lo dice explícitamente; si no dice nada, " +
+      "\"activa\".\n" +
+      "- \"notes\": un detalle corto extra si lo hay (ej: \"verificación pendiente\"), o \"\" si no hay nada.\n\n" +
+      "No inventes casas que no estén ahí. Si el mismo nombre aparece repetido, devolvelo una sola vez.\n\n" +
+      "Respondé con SOLO un JSON con esta forma exacta, sin texto adicional:\n" +
+      '{"bookmakers": [{"name": "string", "balance": 2000000, "status": "activa", "notes": "string"}], "notes": "string opcional, solo si algo no se pudo leer bien"}';
+
+    var task = activeProvider === "claude"
+      ? sampleFn(prompt, selectedBmPhotoFiles.length ? {images: selectedBmPhotoFiles} : undefined).then(function(res){ return {parsed: tolerantJsonParse(res.text), raw: res.text}; })
+      : analyzeViaWorker(prompt, selectedBmPhotoFiles);
+
+    task.then(function(result){
+      btn.disabled = false;
+      var data = result.parsed;
+      var rows = Array.isArray(data && data.bookmakers) ? data.bookmakers : [];
+      rows = rows.map(function(r){
+        var balance = Number(r && r.balance);
+        var st = (r && r.status);
+        st = (st === "limitada" || st === "cerrada") ? st : "activa";
+        return {
+          name: String((r && r.name) || "").trim(),
+          balance: isFinite(balance) ? balance : null,
+          status: st,
+          notes: String((r && r.notes) || "").trim()
+        };
+      }).filter(function(r){ return r.name; });
+
+      if(rows.length === 0){
+        status.style.color = "var(--danger)";
+        status.textContent = "No pude identificar casas de apuestas ahí. Probá con otra captura o cargalas a mano.";
+        renderBmPhotoResults([], (data && data.notes) ? String(data.notes) : "");
+        return;
+      }
+      status.style.color = "var(--success)";
+      status.textContent = "Listo — " + rows.length + " casa" + (rows.length===1?"":"s") + " detectada" + (rows.length===1?"":"s") + ".";
+      renderBmPhotoResults(rows, (data && data.notes) ? String(data.notes) : "");
+    }).catch(function(err){
+      btn.disabled = false;
+      status.style.color = "var(--danger)";
+      var code = err && err.code;
+      status.textContent = PHOTO_ERROR_MESSAGES[code] || ("No se pudo analizar" + (err && err.message ? ": " + err.message : "."));
+    });
+  });
+
   document.getElementById("captureScreenBtn").addEventListener("click", function(){
     if(!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia){
       toast("Tu navegador no admite compartir pantalla. Probá con Chrome o Edge, o subí la captura como archivo.");
@@ -1215,9 +1442,12 @@
   });
 
   document.addEventListener("paste", function(e){
-    var uploadUi = document.getElementById("photoUploadUI");
-    if(uploadUi.style.display !== "block") return;
-    if(!document.getElementById("tab-plan").classList.contains("active")) return;
+    var isPlanActive = document.getElementById("tab-plan").classList.contains("active");
+    var isBooksActive = document.getElementById("tab-books").classList.contains("active");
+    if(!isPlanActive && !isBooksActive) return;
+    var target = isPlanActive ? "plan" : "books";
+    if(target === "plan" && document.getElementById("photoUploadUI").style.display !== "block") return;
+    if(target === "books" && document.getElementById("bmPhotoUploadUI").style.display !== "block") return;
     var items = (e.clipboardData || window.clipboardData) ? (e.clipboardData || window.clipboardData).items : null;
     if(!items) return;
     var files = [];
@@ -1229,7 +1459,7 @@
     }
     if(files.length === 0) return;
     e.preventDefault();
-    addPhotoFiles(files);
+    if(target === "plan") addPhotoFiles(files); else addBmPhotoFiles(files);
   });
 
   var PHOTO_ERROR_MESSAGES = {
