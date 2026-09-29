@@ -5,3 +5,6 @@ surebet-tracker-historial-*.csv
 # Cloudflare Worker local tooling cache (nunca contiene los secretos, esos viven solo en Cloudflare)
 worker/.wrangler/
 worker/node_modules/
+
+# Config local para previsualizar la página con un servidor estático (no hace falta en el repo)
+.claude/launch.json

@@ -391,6 +391,7 @@
     </div>
     <nav class="tabs">
       <button class="tab-btn active" data-tab="calc">Calculadora</button>
+      <button class="tab-btn" data-tab="plan">Plan</button>
       <button class="tab-btn" data-tab="log">Registro &amp; P&amp;L</button>
       <button class="tab-btn" data-tab="books">Casas</button>
       <button class="tab-btn" data-tab="expenses">Gastos</button>
@@ -416,7 +417,7 @@
       </div>
       <ol class="onboarding-steps">
         <li><strong>Registrate y cargá saldo</strong> en al menos 2 casas de apuestas distintas. Anotalas en la pestaña "Casas" para llevar el control.</li>
-        <li><strong>Buscá una oportunidad</strong>: subí una captura de Betburger en "Cargar desde capturas" (abajo), o cargá las cuotas a mano en la calculadora.</li>
+        <li><strong>Buscá una oportunidad</strong>: en la pestaña "Plan" subí una captura de Betburger o pegá el texto del listado, o cargá las cuotas a mano acá abajo en la calculadora.</li>
         <li><strong>Revisá el resultado</strong>: si dice "SUREBET" y la ganancia da positiva, hay arbitraje. Si dice "No es surebet", no apuestes con esas cuotas.</li>
         <li><strong>Anotá los montos</strong> que te indica la tabla (uno por casa) y cargalos <strong>ya</strong> en cada casa, antes de que la cuota cambie.</li>
         <li><strong>Guardá la apuesta</strong> en el registro, y cuando termine el evento, liquidala (pestaña Registro) para que tu ganancia real quede contada.</li>
@@ -424,53 +425,6 @@
       <p class="card-hint" style="margin:8px 0 0;">¿Un término no te queda claro? Bajá hasta "Glosario rápido de términos" en la calculadora.</p>
     </div>
     <div class="type-tag" id="onboardingReopenLink" style="display:none; margin:-6px 0 16px; cursor:pointer;">↺ Mostrar de nuevo la guía de primeros pasos</div>
-
-    <div class="card photo-card" id="photoCard">
-      <h2 class="card-title" style="font-size:17px;">Cargar desde capturas (BetBurger y similares)</h2>
-      <p class="card-hint">Pegá (Ctrl+V) o subí una o varias capturas de una app de comparación de cuotas. Claude identifica cada oportunidad, arma las cuotas y te explica cómo ejecutarla — siempre revisá los datos antes de guardar.</p>
-      <div class="photo-avail" id="photoAvailStatus">Verificando si esta vista admite analizar imágenes con Claude…</div>
-      <div class="photo-upload-ui" id="photoUploadUI">
-        <div class="photo-row">
-          <div class="photo-thumbs" id="photoThumbs"></div>
-          <div class="photo-controls">
-            <input type="file" id="photoInput" accept="image/*" multiple hidden>
-            <span class="photo-note">Tip: con esta pestaña abierta, pegá capturas directo con Ctrl+V (Cmd+V en Mac) — no hace falta guardarlas primero.</span>
-            <button class="btn btn-sm" id="captureScreenBtn">🖥️ Capturar pantalla</button>
-            <button class="btn btn-sm btn-accent" id="analyzePhotoBtn" disabled>Analizar con Claude</button>
-            <span class="photo-status" id="photoStatus"></span>
-            <span class="photo-note">Cada análisis usa tu cuota de uso de Claude.</span>
-          </div>
-        </div>
-        <div class="field" style="margin-top:10px;">
-          <label for="arbTextInput">O pegá acá el texto de una lista de arbitrajes (ej: copiado de la página de arbs de Betburger)</label>
-          <textarea id="arbTextInput" class="bm-input" rows="4" placeholder="Pegá (Ctrl+V) el texto copiado del listado, con los % , casas, eventos y cuotas..." style="width:100%; font-family:'IBM Plex Mono'; font-size:12px; resize:vertical;"></textarea>
-        </div>
-        <div id="photoResults"></div>
-        <div id="photoChat" class="photo-chat" style="display:none;">
-          <div class="card-hint" style="margin:0 0 8px;">¿Te quedó alguna duda sobre esto? Preguntale a Claude — se acuerda de lo que ya analizó.</div>
-          <div id="photoChatLog" class="photo-chat-log"></div>
-          <div class="photo-chat-row">
-            <input type="text" id="photoChatInput" placeholder="Ej: ¿por qué esta no es surebet?">
-            <button class="btn btn-sm btn-accent" id="photoChatSendBtn">Preguntar</button>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <div class="card" id="dailyPlanCard" style="display:none;">
-      <h2 class="card-title" style="font-size:17px;">Plan de arbitrajes de hoy</h2>
-      <p class="card-hint">Con las oportunidades que acabás de analizar y el saldo <strong>disponible</strong> de cada casa (Casas → Disponible), arma una selección para llegar a tu meta de ganancia, priorizando las de mejor %. No descuenta 4x1000 ni otros gastos — para ver la ganancia después de eso, mirá "Ganancia real" en Registro.</p>
-      <div class="field-row">
-        <div class="field" style="flex:0 0 220px;">
-          <label for="dailyGoalInput">Meta mínima de ganancia hoy</label>
-          <input type="number" min="0" step="10000" class="num-input" id="dailyGoalInput" value="100000">
-        </div>
-        <div class="field" style="align-self:flex-end;">
-          <button class="btn btn-accent" id="buildPlanBtn">Armar plan con mi capital</button>
-        </div>
-      </div>
-      <div id="dailyPlanResults"></div>
-    </div>
 
     <div class="calc-grid">
       <div class="card">
@@ -566,6 +520,56 @@
           </table>
         </div>
       </div>
+    </div>
+  </section>
+
+  <!-- PLAN DEL DÍA -->
+  <section id="tab-plan" class="tab-panel">
+    <div class="card photo-card" id="photoCard">
+      <h2 class="card-title" style="font-size:17px;">Cargar desde capturas (BetBurger y similares)</h2>
+      <p class="card-hint">Pegá (Ctrl+V) o subí una o varias capturas de una app de comparación de cuotas. Claude identifica cada oportunidad, arma las cuotas y te explica cómo ejecutarla — siempre revisá los datos antes de guardar.</p>
+      <div class="photo-avail" id="photoAvailStatus">Verificando si esta vista admite analizar imágenes con Claude…</div>
+      <div class="photo-upload-ui" id="photoUploadUI">
+        <div class="photo-row">
+          <div class="photo-thumbs" id="photoThumbs"></div>
+          <div class="photo-controls">
+            <input type="file" id="photoInput" accept="image/*" multiple hidden>
+            <span class="photo-note">Tip: con esta pestaña abierta, pegá capturas directo con Ctrl+V (Cmd+V en Mac) — no hace falta guardarlas primero.</span>
+            <button class="btn btn-sm" id="captureScreenBtn">🖥️ Capturar pantalla</button>
+            <button class="btn btn-sm btn-accent" id="analyzePhotoBtn" disabled>Analizar con Claude</button>
+            <span class="photo-status" id="photoStatus"></span>
+            <span class="photo-note">Cada análisis usa tu cuota de uso de Claude.</span>
+          </div>
+        </div>
+        <div class="field" style="margin-top:10px;">
+          <label for="arbTextInput">O pegá acá el texto de una lista de arbitrajes (ej: copiado de la página de arbs de Betburger)</label>
+          <textarea id="arbTextInput" class="bm-input" rows="4" placeholder="Pegá (Ctrl+V) el texto copiado del listado, con los % , casas, eventos y cuotas..." style="width:100%; font-family:'IBM Plex Mono'; font-size:12px; resize:vertical;"></textarea>
+        </div>
+        <div id="photoResults"></div>
+        <div id="photoChat" class="photo-chat" style="display:none;">
+          <div class="card-hint" style="margin:0 0 8px;">¿Te quedó alguna duda sobre esto? Preguntale a Claude — se acuerda de lo que ya analizó.</div>
+          <div id="photoChatLog" class="photo-chat-log"></div>
+          <div class="photo-chat-row">
+            <input type="text" id="photoChatInput" placeholder="Ej: ¿por qué esta no es surebet?">
+            <button class="btn btn-sm btn-accent" id="photoChatSendBtn">Preguntar</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" id="dailyPlanCard" style="display:none;">
+      <h2 class="card-title" style="font-size:17px;">Plan de arbitrajes de hoy</h2>
+      <p class="card-hint">Con las oportunidades que acabás de analizar y el saldo <strong>disponible</strong> de cada casa (Casas → Disponible), arma una selección para llegar a tu meta de ganancia, priorizando las de mejor %. No descuenta 4x1000 ni otros gastos — para ver la ganancia después de eso, mirá "Ganancia real" en Registro.</p>
+      <div class="field-row">
+        <div class="field" style="flex:0 0 220px;">
+          <label for="dailyGoalInput">Meta mínima de ganancia hoy</label>
+          <input type="number" min="0" step="10000" class="num-input" id="dailyGoalInput" value="100000">
+        </div>
+        <div class="field" style="align-self:flex-end;">
+          <button class="btn btn-accent" id="buildPlanBtn">Armar plan con mi capital</button>
+        </div>
+      </div>
+      <div id="dailyPlanResults"></div>
     </div>
   </section>
 
@@ -1211,7 +1215,7 @@
   document.addEventListener("paste", function(e){
     var uploadUi = document.getElementById("photoUploadUI");
     if(uploadUi.style.display !== "block") return;
-    if(!document.getElementById("tab-calc").classList.contains("active")) return;
+    if(!document.getElementById("tab-plan").classList.contains("active")) return;
     var items = (e.clipboardData || window.clipboardData) ? (e.clipboardData || window.clipboardData).items : null;
     if(!items) return;
     var files = [];
@@ -1311,6 +1315,7 @@
         if(opp.event) document.getElementById("eventName").value = opp.event;
         renderLegs();
         compute();
+        document.querySelector('.tab-btn[data-tab="calc"]').click();
         document.querySelector(".calc-grid").scrollIntoView({behavior: "smooth", block: "start"});
         toast("Cargado en la calculadora");
       });
