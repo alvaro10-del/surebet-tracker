@@ -436,6 +436,10 @@
             <span class="photo-note">Cada análisis usa tu cuota de uso de Claude.</span>
           </div>
         </div>
+        <div class="field" style="margin-top:10px;">
+          <label for="arbTextInput">O pegá acá el texto de una lista de arbitrajes (ej: copiado de la página de arbs de Betburger)</label>
+          <textarea id="arbTextInput" class="bm-input" rows="4" placeholder="Pegá (Ctrl+V) el texto copiado del listado, con los % , casas, eventos y cuotas..." style="width:100%; font-family:'IBM Plex Mono'; font-size:12px; resize:vertical;"></textarea>
+        </div>
         <div id="photoResults"></div>
         <div id="photoChat" class="photo-chat" style="display:none;">
           <div class="card-hint" style="margin:0 0 8px;">¿Te quedó alguna duda sobre esto? Preguntale a Claude — se acuerda de lo que ya analizó.</div>
@@ -446,6 +450,21 @@
           </div>
         </div>
       </div>
+    </div>
+
+    <div class="card" id="dailyPlanCard" style="display:none;">
+      <h2 class="card-title" style="font-size:17px;">Plan de arbitrajes de hoy</h2>
+      <p class="card-hint">Con las oportunidades que acabás de analizar y el saldo <strong>disponible</strong> de cada casa (Casas → Disponible), arma una selección para llegar a tu meta de ganancia, priorizando las de mejor %. No descuenta 4x1000 ni otros gastos — para ver la ganancia después de eso, mirá "Ganancia real" en Registro.</p>
+      <div class="field-row">
+        <div class="field" style="flex:0 0 220px;">
+          <label for="dailyGoalInput">Meta mínima de ganancia hoy</label>
+          <input type="number" min="0" step="10000" class="num-input" id="dailyGoalInput" value="100000">
+        </div>
+        <div class="field" style="align-self:flex-end;">
+          <button class="btn btn-accent" id="buildPlanBtn">Armar plan con mi capital</button>
+        </div>
+      </div>
+      <div id="dailyPlanResults"></div>
     </div>
 
     <div class="calc-grid">
@@ -1126,8 +1145,14 @@
     document.getElementById("addPhotoTile").addEventListener("click", function(){
       document.getElementById("photoInput").click();
     });
-    document.getElementById("analyzePhotoBtn").disabled = selectedPhotoFiles.length === 0;
+    updateAnalyzeBtnState();
   }
+
+  function updateAnalyzeBtnState(){
+    var text = document.getElementById("arbTextInput").value.trim();
+    document.getElementById("analyzePhotoBtn").disabled = selectedPhotoFiles.length === 0 && text.length === 0;
+  }
+  document.getElementById("arbTextInput").addEventListener("input", updateAnalyzeBtnState);
 
   function addPhotoFiles(fileList){
     var arr = Array.prototype.filter.call(fileList, function(f){ return f && f.type && f.type.indexOf("image") === 0; });
@@ -1288,13 +1313,18 @@
   }
 
   document.getElementById("analyzePhotoBtn").addEventListener("click", function(){
-    if(!activeProvider || selectedPhotoFiles.length === 0) return;
+    var pastedText = document.getElementById("arbTextInput").value.trim();
+    if(!activeProvider || (selectedPhotoFiles.length === 0 && !pastedText)) return;
     var btn = document.getElementById("analyzePhotoBtn");
     var status = document.getElementById("photoStatus");
     btn.disabled = true;
     status.style.color = "var(--text-muted)";
-    status.textContent = "Analizando " + selectedPhotoFiles.length + " imagen" + (selectedPhotoFiles.length===1?"":"es") + "...";
+    var parts = [];
+    if(selectedPhotoFiles.length) parts.push(selectedPhotoFiles.length + " imagen" + (selectedPhotoFiles.length===1?"":"es"));
+    if(pastedText) parts.push("el texto pegado");
+    status.textContent = "Analizando " + parts.join(" y ") + "...";
     document.getElementById("photoResults").innerHTML = "";
+    document.getElementById("dailyPlanCard").style.display = "none";
 
     var modeNote = marketTiming === "prematch"
       ? "Esta app por ahora solo procesa mercados PREPARTIDO (pre-match) — antes de que arranque el evento, con hora/fecha fija. " +
@@ -1303,10 +1333,19 @@
         "explicación que las cuotas en vivo cambian muy rápido y esta captura puede estar desactualizada."
       : "";
 
-    var prompt = "Estas imágenes son capturas relacionadas con arbitraje deportivo (surebets). Pueden ser una LISTA con muchas filas " +
+    var textBlock = pastedText
+      ? "\n\nADEMÁS (o en lugar de imágenes) el usuario pegó este texto, copiado tal cual de una página de arbitrajes (como la lista " +
+        "de arbs de Betburger). Cada oportunidad suele venir como: un %, el deporte, cuánto falta para el evento, y luego 2 (o 3) " +
+        "bloques repetidos con: nombre de la casa, fecha/hora, nombre del evento, competición, el mercado/línea (ej: \"TO(13.5) - " +
+        "Corners\", \"EH1(10)\"), y la cuota decimal. Interpretalo con el mismo criterio que una captura — extraé cada oportunidad " +
+        "completa (todas sus casas/cuotas), no inventes datos que no estén en el texto:\n---\n" + pastedText + "\n---\n"
+      : "";
+
+    var prompt = "Estas imágenes" + (pastedText ? " (si las hay) y/o el texto pegado más abajo" : "") + " son sobre arbitraje " +
+      "deportivo (surebets). Pueden ser una LISTA con muchas filas " +
       "de oportunidades (como el feed de BetBurger, cada fila con un evento, un % de ganancia a la izquierda, y dos o más cuotas " +
       "emparejadas — normalmente resaltadas o agrupadas visualmente — cada una de una casa distinta), o capturas sueltas de una o " +
-      "dos casas de apuestas para el mismo evento. " + modeNote + "\n\n" +
+      "dos casas de apuestas para el mismo evento. " + modeNote + textBlock + "\n\n" +
       "Tu tarea:\n" +
       "1. Identificá CADA oportunidad de arbitraje visible, una por fila si es una lista tipo BetBurger — no te quedes solo con la " +
       "primera. Cada oportunidad es UN mercado de UN evento con las cuotas de sus distintos resultados (típicamente 2: las dos " +
@@ -1344,7 +1383,7 @@
       "y en promedio se pierde plata haciéndola, así no la confunde con una recomendación.";
 
     var task = activeProvider === "claude"
-      ? sampleFn(prompt, {images: selectedPhotoFiles}).then(function(res){ return {parsed: tolerantJsonParse(res.text), raw: res.text}; })
+      ? sampleFn(prompt, selectedPhotoFiles.length ? {images: selectedPhotoFiles} : undefined).then(function(res){ return {parsed: tolerantJsonParse(res.text), raw: res.text}; })
       : analyzeViaWorker(prompt, selectedPhotoFiles);
 
     task.then(function(result){
@@ -1384,6 +1423,8 @@
       status.style.color = "var(--success)";
       status.textContent = "Listo — " + opps.length + " oportunidad" + (opps.length===1?"":"es") + " detectada" + (opps.length===1?"":"s") + ".";
       renderPhotoResults(opps, (data && data.notes) ? String(data.notes) : "");
+      document.getElementById("dailyPlanCard").style.display = "block";
+      document.getElementById("dailyPlanResults").innerHTML = "";
     }).catch(function(err){
       btn.disabled = false;
       status.style.color = "var(--danger)";
@@ -1441,6 +1482,196 @@
   }
   document.getElementById("photoChatSendBtn").addEventListener("click", sendChatMessage);
   document.getElementById("photoChatInput").addEventListener("keydown", function(e){ if(e.key === "Enter") sendChatMessage(); });
+
+  // ---------- Plan de arbitrajes de hoy (arma una selección con el capital disponible real) ----------
+  var lastPlan = null;
+
+  function buildDailyPlan(goalAmount){
+    var available = {};
+    allBookmakers.forEach(function(b){
+      var key = (b.name || "").trim().toLowerCase();
+      if(!key) return;
+      var pending = pendingExposureByBookmaker()[key] || 0;
+      available[key] = {
+        remaining: Math.max(0, (b.balance || 0) - pending),
+        stakeLimit: b.stakeLimit || 0,
+        status: b.status,
+        name: b.name
+      };
+    });
+
+    var candidates = lastOpportunities.map(function(opp){
+      var impliedSum = opp.legs.reduce(function(s,l){ return s + 1/effOdds(l); }, 0);
+      var isSurebet = opp.legs.length >= 2 && impliedSum < 1;
+      var profitPct = impliedSum > 0 ? (1/impliedSum - 1) * 100 : 0;
+      return {opp: opp, impliedSum: impliedSum, isSurebet: isSurebet, profitPct: profitPct};
+    });
+
+    var picks = [];
+    var excluded = [];
+    var runningProfit = 0;
+
+    candidates.filter(function(c){ return c.isSurebet; })
+      .sort(function(a,b){ return b.profitPct - a.profitPct; })
+      .forEach(function(c){
+        if(runningProfit >= goalAmount){
+          excluded.push({opp: c.opp, reason: "La meta ya se alcanza con otras oportunidades mejores — esta queda de reserva."});
+          return;
+        }
+        if(c.opp.live){
+          excluded.push({opp: c.opp, reason: "Está EN VIVO — las cuotas cambian todo el tiempo, no se incluye en el plan automático."});
+          return;
+        }
+        var weights = [];
+        var maxStake = Infinity;
+        var problem = null;
+        c.opp.legs.forEach(function(l){
+          var key = l.bookmaker.trim().toLowerCase();
+          var w = (1/effOdds(l)) / c.impliedSum;
+          weights.push({leg: l, weight: w});
+          var av = available[key];
+          if(!av){ problem = "La casa \"" + l.bookmaker + "\" no está registrada en Casas — agregala con su saldo para poder incluir esta oportunidad."; return; }
+          if(av.status === "cerrada"){ problem = "\"" + l.bookmaker + "\" figura como Cerrada en Casas."; return; }
+          if(w > 0){
+            maxStake = Math.min(maxStake, av.remaining / w);
+            if(av.stakeLimit) maxStake = Math.min(maxStake, av.stakeLimit / w);
+          }
+        });
+        if(problem){ excluded.push({opp: c.opp, reason: problem}); return; }
+        if(!isFinite(maxStake) || maxStake < 10000){
+          excluded.push({opp: c.opp, reason: "No hay saldo disponible suficiente en alguna de las casas involucradas."});
+          return;
+        }
+
+        var remainingGoal = Math.max(0, goalAmount - runningProfit);
+        var perUnitProfit = 1/c.impliedSum - 1;
+        var desiredStake = perUnitProfit > 0 ? remainingGoal / perUnitProfit : maxStake;
+        var totalStake = Math.min(maxStake, Math.max(desiredStake, 10000));
+        totalStake = Math.floor(totalStake / 1000) * 1000;
+        if(totalStake < 10000){
+          excluded.push({opp: c.opp, reason: "El monto que se podría cubrir ahí es muy chico para que valga la pena."});
+          return;
+        }
+
+        var pickLegs = weights.map(function(w){
+          var stake = Math.round(totalStake * w.weight / 1000) * 1000;
+          return {bookmaker: w.leg.bookmaker, outcome: w.leg.outcome, odds: w.leg.odds, commissionPct: 0, stake: stake};
+        });
+        var actualTotal = pickLegs.reduce(function(s,l){ return s + l.stake; }, 0);
+        pickLegs.forEach(function(l){ l.payout = l.stake * effOdds(l); l.profitIfWin = l.payout - actualTotal; });
+        var minProfit = Math.min.apply(null, pickLegs.map(function(l){ return l.profitIfWin; }));
+
+        if(minProfit <= 0){
+          excluded.push({opp: c.opp, reason: "Al redondear los montos a $1.000 se pierde la ganancia garantizada — cargala a mano en la calculadora sin redondeo."});
+          return;
+        }
+
+        pickLegs.forEach(function(l){
+          var key = l.bookmaker.trim().toLowerCase();
+          available[key].remaining -= l.stake;
+        });
+        runningProfit += minProfit;
+        picks.push({
+          event: c.opp.event, market: c.opp.market, legs: pickLegs, totalStake: actualTotal,
+          expectedProfit: minProfit, profitPct: c.profitPct, impliedSum: c.impliedSum
+        });
+      });
+
+    candidates.filter(function(c){ return !c.isSurebet; }).forEach(function(c){
+      excluded.push({opp: c.opp, reason: "No es una surebet real con esas cuotas (la suma de probabilidades implícitas no baja de 1)."});
+    });
+
+    return {picks: picks, excluded: excluded, totalProfit: runningProfit, goalMet: runningProfit >= goalAmount, goal: goalAmount};
+  }
+
+  function savePlanPick(pick, btnEl){
+    var record = {
+      event: pick.event || "(Sin nombre)",
+      date: todayStr(),
+      type: "surebet",
+      impliedSum: pick.impliedSum,
+      totalStake: pick.totalStake,
+      expectedProfit: pick.expectedProfit,
+      marketTiming: marketTiming,
+      notes: "Guardado desde Plan de arbitrajes de hoy",
+      legs: pick.legs.map(function(l){ return {bookmaker: l.bookmaker, outcome: l.outcome, odds: l.odds, commissionPct: 0, stake: l.stake}; }),
+      status: "pendiente",
+      profit: null,
+      settledLegIndex: null,
+      createdAt: Date.now()
+    };
+    if(db){
+      betsCollection().add(record).then(function(){
+        toast("Apuesta guardada en el registro");
+        btnEl.textContent = "Guardada ✓";
+        btnEl.disabled = true;
+      }).catch(function(err){
+        toast("No se pudo guardar: " + (err && err.message ? err.message : "error"));
+      });
+    } else {
+      record._localId = uid();
+      withLocalBets(function(arr){ arr.unshift(record); });
+      renderLog();
+      toast("Apuesta guardada en este navegador");
+      btnEl.textContent = "Guardada ✓";
+      btnEl.disabled = true;
+    }
+  }
+
+  function renderDailyPlan(plan){
+    lastPlan = plan;
+    var el = document.getElementById("dailyPlanResults");
+    var html = "";
+    html += '<div class="badge ' + (plan.goalMet ? "yes" : "no") + '" style="margin-bottom:10px;">' +
+      (plan.goalMet ? "✅ Se puede llegar a la meta: " : "⚠ No se alcanza la meta con tu capital actual: ") +
+      fmtMoney(plan.totalProfit) + ' de ' + fmtMoney(plan.goal) + '</div>';
+
+    if(plan.picks.length === 0){
+      html += '<div class="photo-note-block">Con tu saldo disponible actual no se pudo armar ninguna apuesta de este lote. Revisá los motivos abajo o cargá saldo en Casas.</div>';
+    } else {
+      html += plan.picks.map(function(pick, i){
+        var legsList = pick.legs.map(function(l){
+          return escapeHtml(l.bookmaker) + ': apostá <strong>' + fmtMoney(l.stake) + '</strong> a ' + escapeHtml(l.outcome) +
+            ' <span class="cell-num">@' + l.odds.toFixed(2) + '</span>';
+        }).join('<br>');
+        return '<div class="opp-card">' +
+          '<div class="opp-header">' +
+            '<div><strong>' + escapeHtml(pick.event || "Evento sin nombre") + '</strong>' +
+              (pick.market ? ' <span class="type-tag">· ' + escapeHtml(pick.market) + '</span>' : '') +
+            '</div>' +
+            '<span class="badge-mini yes">+' + fmtMoney(pick.expectedProfit) + '</span>' +
+          '</div>' +
+          '<div class="opp-legs type-tag">' + legsList + '</div>' +
+          '<div class="type-tag">Invertís ' + fmtMoney(pick.totalStake) + ' en total, ganancia garantizada ' + fmtMoney(pick.expectedProfit) + ' (' + fmtPct(pick.profitPct) + ').</div>' +
+          '<button class="btn btn-sm btn-accent" data-save-pick="' + i + '">Guardar en registro</button>' +
+        '</div>';
+      }).join("");
+    }
+
+    if(plan.excluded.length){
+      html += '<details class="help" style="margin-top:10px;"><summary>' + plan.excluded.length + ' oportunidad' + (plan.excluded.length===1?"":"es") + ' no incluida' + (plan.excluded.length===1?"":"s") + ' — ver por qué</summary>';
+      html += plan.excluded.map(function(x){
+        return '<p class="opp-explanation">' + escapeHtml(x.opp.event || "Evento sin nombre") + ': ' + escapeHtml(x.reason) + '</p>';
+      }).join("");
+      html += '</details>';
+    }
+
+    el.innerHTML = html;
+    el.querySelectorAll("[data-save-pick]").forEach(function(btn){
+      btn.addEventListener("click", function(){
+        var pick = lastPlan.picks[+btn.dataset.savePick];
+        if(!pick) return;
+        savePlanPick(pick, btn);
+      });
+    });
+  }
+
+  document.getElementById("buildPlanBtn").addEventListener("click", function(){
+    if(!lastOpportunities.length){ toast("Primero analizá una lista de arbitrajes arriba."); return; }
+    var goal = parseFloat(document.getElementById("dailyGoalInput").value);
+    if(!isFinite(goal) || goal < 0) goal = 0;
+    renderDailyPlan(buildDailyPlan(goal));
+  });
 
   // ---------- Storage (cloud db, or localStorage when running outside the artifact viewer) ----------
   var STORAGE_KEYS = { bets: "surebet-tracker:bets", bookmakers: "surebet-tracker:bookmakers", expenses: "surebet-tracker:expenses" };

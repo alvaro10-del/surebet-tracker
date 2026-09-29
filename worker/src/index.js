@@ -143,8 +143,9 @@ async function handleAnalyze(request, env) {
   if (!Array.isArray(images)) {
     return json({ error: "bad_request" }, 400, env);
   }
-  // A fresh analysis needs at least one image; a chat follow-up carries prior turns instead.
-  if (images.length === 0 && (!Array.isArray(history) || history.length === 0)) {
+  // A fresh analysis needs at least one image or a long-enough prompt (e.g. pasted arb-list
+  // text bundled into the prompt); a chat follow-up carries prior turns instead.
+  if (images.length === 0 && prompt.length < 50 && (!Array.isArray(history) || history.length === 0)) {
     return json({ error: "bad_request" }, 400, env);
   }
   if (images.length > 6) {
