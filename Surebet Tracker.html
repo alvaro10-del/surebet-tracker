@@ -328,6 +328,11 @@
   .badge-mini.no{ background:var(--danger-soft); color:var(--danger); }
   .badge-mini.plain{ background:var(--accent-soft); color:var(--accent-strong); }
   .opp-legs{ margin-bottom:8px; }
+  .plan-check-row{ display:flex; align-items:center; gap:6px; font-size:12px; color:var(--text-muted); margin-bottom:8px; cursor:pointer; user-select:none; }
+  .plan-check-row input{ cursor:pointer; }
+  .opp-card.plan-inactive{ background:var(--surface); }
+  .opp-card.plan-inactive .plan-pick-body{ text-decoration:line-through; opacity:0.5; }
+  .plan-distribution{ margin-bottom:10px; }
   .opp-explanation{ font-size:13px; line-height:1.6; color:var(--text-secondary); margin:0 0 10px; }
 
   .bm-dot{ width:7px; height:7px; border-radius:50%; display:inline-block; margin-right:6px; flex-shrink:0; }
@@ -1618,31 +1623,75 @@
     }
   }
 
+  // Recomputes totals/distribution only from picks the user still has checked as "verified,
+  // still available" — unchecking one (odds changed / event pulled) excludes it here without
+  // losing its place in the list, so it stays visible but crossed out.
+  function computePlanSummary(plan){
+    var byBookmaker = {};
+    var totalProfit = 0, totalStake = 0, activeCount = 0;
+    plan.picks.forEach(function(pick){
+      if(pick.active === false) return;
+      activeCount++;
+      totalProfit += pick.expectedProfit;
+      totalStake += pick.totalStake;
+      pick.legs.forEach(function(l){
+        byBookmaker[l.bookmaker] = (byBookmaker[l.bookmaker] || 0) + l.stake;
+      });
+    });
+    return {byBookmaker: byBookmaker, totalProfit: totalProfit, totalStake: totalStake, activeCount: activeCount, goalMet: totalProfit >= plan.goal};
+  }
+
+  function renderPlanSummary(plan){
+    var el = document.getElementById("planSummaryBlock");
+    if(!el) return;
+    var summary = computePlanSummary(plan);
+    var html = '<div class="badge ' + (summary.goalMet ? "yes" : "no") + '" style="margin-bottom:10px;">' +
+      (summary.goalMet ? "✅ Se puede llegar a la meta: " : "⚠ No se alcanza la meta con lo que dejaste activo: ") +
+      fmtMoney(summary.totalProfit) + ' de ' + fmtMoney(plan.goal) + '</div>';
+    var bookNames = Object.keys(summary.byBookmaker);
+    if(bookNames.length){
+      html += '<div class="plan-distribution">' +
+        '<div class="type-tag" style="margin-bottom:6px;">Así queda repartido tu capital en este plan (' +
+          summary.activeCount + ' apuesta' + (summary.activeCount===1?"":"s") + ' activa' + (summary.activeCount===1?"":"s") +
+          ' · ' + fmtMoney(summary.totalStake) + ' en total):</div>' +
+        bookNames.map(function(name){
+          return '<div class="book-bar-row"><div class="book-bar-label">' + escapeHtml(name) + '</div>' +
+            '<div class="book-bar-value num">' + fmtMoney(summary.byBookmaker[name]) + '</div></div>';
+        }).join("") +
+      '</div>';
+    } else if(plan.picks.length){
+      html += '<div class="type-tag" style="margin-bottom:10px;">Desmarcaste todas las apuestas del plan — no queda capital distribuido.</div>';
+    }
+    el.innerHTML = html;
+  }
+
   function renderDailyPlan(plan){
     lastPlan = plan;
+    plan.picks.forEach(function(pick){ pick.active = true; });
     var el = document.getElementById("dailyPlanResults");
-    var html = "";
-    html += '<div class="badge ' + (plan.goalMet ? "yes" : "no") + '" style="margin-bottom:10px;">' +
-      (plan.goalMet ? "✅ Se puede llegar a la meta: " : "⚠ No se alcanza la meta con tu capital actual: ") +
-      fmtMoney(plan.totalProfit) + ' de ' + fmtMoney(plan.goal) + '</div>';
+    var html = '<div id="planSummaryBlock"></div>';
 
     if(plan.picks.length === 0){
       html += '<div class="photo-note-block">Con tu saldo disponible actual no se pudo armar ninguna apuesta de este lote. Revisá los motivos abajo o cargá saldo en Casas.</div>';
     } else {
+      html += '<div class="card-hint" style="margin-bottom:6px;">Antes de apostar, entrá a cada casa y confirmá que la cuota sigue igual. Si cambió o ya no está, desmarcá esa apuesta — queda tachada y se saca del reparto de capital de arriba, sin borrarla de la lista.</div>';
       html += plan.picks.map(function(pick, i){
         var legsList = pick.legs.map(function(l){
           return escapeHtml(l.bookmaker) + ': apostá <strong>' + fmtMoney(l.stake) + '</strong> a ' + escapeHtml(l.outcome) +
             ' <span class="cell-num">@' + l.odds.toFixed(2) + '</span>';
         }).join('<br>');
-        return '<div class="opp-card">' +
-          '<div class="opp-header">' +
-            '<div><strong>' + escapeHtml(pick.event || "Evento sin nombre") + '</strong>' +
-              (pick.market ? ' <span class="type-tag">· ' + escapeHtml(pick.market) + '</span>' : '') +
+        return '<div class="opp-card" data-pick-card="' + i + '">' +
+          '<label class="plan-check-row"><input type="checkbox" class="plan-pick-check" data-i="' + i + '" checked> Verifiqué que esta sigue disponible</label>' +
+          '<div class="plan-pick-body">' +
+            '<div class="opp-header">' +
+              '<div><strong>' + escapeHtml(pick.event || "Evento sin nombre") + '</strong>' +
+                (pick.market ? ' <span class="type-tag">· ' + escapeHtml(pick.market) + '</span>' : '') +
+              '</div>' +
+              '<span class="badge-mini yes">+' + fmtMoney(pick.expectedProfit) + '</span>' +
             '</div>' +
-            '<span class="badge-mini yes">+' + fmtMoney(pick.expectedProfit) + '</span>' +
+            '<div class="opp-legs type-tag">' + legsList + '</div>' +
+            '<div class="type-tag">Invertís ' + fmtMoney(pick.totalStake) + ' en total, ganancia garantizada ' + fmtMoney(pick.expectedProfit) + ' (' + fmtPct(pick.profitPct) + ').</div>' +
           '</div>' +
-          '<div class="opp-legs type-tag">' + legsList + '</div>' +
-          '<div class="type-tag">Invertís ' + fmtMoney(pick.totalStake) + ' en total, ganancia garantizada ' + fmtMoney(pick.expectedProfit) + ' (' + fmtPct(pick.profitPct) + ').</div>' +
           '<button class="btn btn-sm btn-accent" data-save-pick="' + i + '">Guardar en registro</button>' +
         '</div>';
       }).join("");
@@ -1657,6 +1706,22 @@
     }
 
     el.innerHTML = html;
+    renderPlanSummary(plan);
+    el.querySelectorAll(".plan-pick-check").forEach(function(cb){
+      cb.addEventListener("change", function(){
+        var i = +cb.dataset.i;
+        var pick = lastPlan.picks[i];
+        if(!pick) return;
+        pick.active = cb.checked;
+        var card = el.querySelector('[data-pick-card="' + i + '"]');
+        if(card){
+          card.classList.toggle("plan-inactive", !pick.active);
+          var saveBtn = card.querySelector('[data-save-pick]');
+          if(saveBtn) saveBtn.disabled = !pick.active;
+        }
+        renderPlanSummary(lastPlan);
+      });
+    });
     el.querySelectorAll("[data-save-pick]").forEach(function(btn){
       btn.addEventListener("click", function(){
         var pick = lastPlan.picks[+btn.dataset.savePick];
