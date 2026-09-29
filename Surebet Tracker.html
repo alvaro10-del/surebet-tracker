@@ -419,7 +419,7 @@
       </div>
       <ol class="onboarding-steps">
         <li><strong>Registrate y cargá saldo</strong> en al menos 2 casas de apuestas distintas. Anotalas en la pestaña "Casas" para llevar el control.</li>
-        <li><strong>Buscá una oportunidad</strong>: en la pestaña "Plan" subí una captura de Betburger o pegá el texto del listado, o cargá las cuotas a mano acá abajo en la calculadora.</li>
+        <li><strong>Buscá una oportunidad</strong>: subí una captura de Betburger o pegá el texto del listado más abajo, o cargá las cuotas a mano en la calculadora.</li>
         <li><strong>Revisá el resultado</strong>: si dice "SUREBET" y la ganancia da positiva, hay arbitraje. Si dice "No es surebet", no apuestes con esas cuotas.</li>
         <li><strong>Anotá los montos</strong> que te indica la tabla (uno por casa) y cargalos <strong>ya</strong> en cada casa, antes de que la cuota cambie.</li>
         <li><strong>Guardá la apuesta</strong> en el registro, y cuando termine el evento, liquidala (pestaña Registro) para que tu ganancia real quede contada.</li>
@@ -772,14 +772,31 @@
   });
 
   // ---------- Tabs ----------
+  // "Cargar desde capturas" is one single card (one set of selected files, one analysis result) —
+  // Calculadora and Plan both want it visible, so instead of duplicating it we move the same DOM
+  // node between the two tabs on switch, rather than keeping two copies of its state in sync.
+  function relocatePhotoCard(target){
+    var photoCard = document.getElementById("photoCard");
+    if(!photoCard) return;
+    if(target === "calc"){
+      var anchor = document.getElementById("onboardingReopenLink");
+      if(anchor && anchor.parentNode) anchor.parentNode.insertBefore(photoCard, anchor.nextSibling);
+    } else if(target === "plan"){
+      var planSection = document.getElementById("tab-plan");
+      if(planSection) planSection.insertBefore(photoCard, planSection.firstChild);
+    }
+  }
+
   document.querySelectorAll(".tab-btn").forEach(function(btn){
     btn.addEventListener("click", function(){
       document.querySelectorAll(".tab-btn").forEach(function(b){ b.classList.remove("active"); });
       document.querySelectorAll(".tab-panel").forEach(function(p){ p.classList.remove("active"); });
       btn.classList.add("active");
       document.getElementById("tab-" + btn.dataset.tab).classList.add("active");
+      relocatePhotoCard(btn.dataset.tab);
     });
   });
+  relocatePhotoCard("calc"); // Calculadora is the tab active on page load
 
   // ---------- Mode: prepartido / en vivo (solo prepartido activo por ahora) ----------
   var marketTiming = "prematch";
@@ -1442,11 +1459,12 @@
   });
 
   document.addEventListener("paste", function(e){
-    var isPlanActive = document.getElementById("tab-plan").classList.contains("active");
+    var isCalcOrPlanActive = document.getElementById("tab-calc").classList.contains("active") ||
+      document.getElementById("tab-plan").classList.contains("active");
     var isBooksActive = document.getElementById("tab-books").classList.contains("active");
-    if(!isPlanActive && !isBooksActive) return;
-    var target = isPlanActive ? "plan" : "books";
-    if(target === "plan" && document.getElementById("photoUploadUI").style.display !== "block") return;
+    if(!isCalcOrPlanActive && !isBooksActive) return;
+    var target = isCalcOrPlanActive ? "arb" : "books";
+    if(target === "arb" && document.getElementById("photoUploadUI").style.display !== "block") return;
     if(target === "books" && document.getElementById("bmPhotoUploadUI").style.display !== "block") return;
     var items = (e.clipboardData || window.clipboardData) ? (e.clipboardData || window.clipboardData).items : null;
     if(!items) return;
@@ -1459,7 +1477,7 @@
     }
     if(files.length === 0) return;
     e.preventDefault();
-    if(target === "plan") addPhotoFiles(files); else addBmPhotoFiles(files);
+    if(target === "arb") addPhotoFiles(files); else addBmPhotoFiles(files);
   });
 
   var PHOTO_ERROR_MESSAGES = {
