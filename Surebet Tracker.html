@@ -308,6 +308,8 @@
   .photo-note{ font-size:11px; color:var(--text-muted); max-width:280px; line-height:1.5; }
 
   .photo-note-block{ background:var(--accent-soft); color:var(--accent-strong); font-size:12.5px; padding:8px 12px; border-radius:9px; margin-bottom:12px; }
+  .real-stake-block{ background:var(--success-soft); font-size:12.5px; padding:10px 12px; border-radius:9px; margin-bottom:8px; }
+  .real-stake-block .type-tag{ color:var(--success); }
 
   .photo-chat{ margin-top:16px; padding-top:16px; border-top:1px dashed var(--border); }
   .photo-chat-log{ display:flex; flex-direction:column; gap:8px; margin-bottom:10px; max-height:340px; overflow-y:auto; }
@@ -1271,6 +1273,7 @@
     if(notes){
       html += '<div class="photo-note-block">' + escapeHtml(notes) + '</div>';
     }
+    var availableForCards = buildAvailableCapitalMap();
     html += opportunities.map(function(opp, i){
       var stats = analyzeLegsStats(opp.legs);
       var badgeCls = opp.legs.length >= 2 ? (stats.isSurebet ? "yes" : "no") : "plain";
@@ -1292,6 +1295,37 @@
       var liveWarningHtml = opp.live
         ? '<div class="photo-note-block">Esta oportunidad parece estar EN VIVO. La app solo procesa mercados prepartido por ahora — las cuotas en vivo cambian todo el tiempo, así que esta captura puede estar desactualizada. Confirmá los precios actuales antes de usarla.</div>'
         : "";
+      // Cuánto apostar acá según TU plata real (saldo disponible por casa), no un ejemplo genérico —
+      // usa la misma fórmula exacta de la calculadora, nunca la aritmética de la IA.
+      var realStakeHtml = "";
+      if(stats.isSurebet && opp.legs.length >= 2){
+        var fit = fitStakeToCapital(opp.legs, stats.impliedSum, availableForCards);
+        if(fit.problem){
+          realStakeHtml = '<div class="type-tag">' + escapeHtml(fit.problem) + '</div>';
+        } else if(!isFinite(fit.maxStake) || fit.maxStake < 10000){
+          realStakeHtml = '<div class="type-tag">No te queda saldo disponible suficiente en esas casas ahora mismo.</div>';
+        } else {
+          var realTotal = Math.floor(fit.maxStake / 1000) * 1000;
+          var realLegs = fit.weights.map(function(w){
+            var stake = Math.round(realTotal * w.weight / 1000) * 1000;
+            return {bookmaker: w.leg.bookmaker, outcome: w.leg.outcome, odds: w.leg.odds, stake: stake, payout: stake * effOdds(w.leg)};
+          });
+          var realActualTotal = realLegs.reduce(function(s,l){ return s + l.stake; }, 0);
+          var realMinProfit = Math.min.apply(null, realLegs.map(function(l){ return l.payout - realActualTotal; }));
+          if(realMinProfit <= 0){
+            realStakeHtml = '<div class="type-tag">Con tu saldo actual, redondear a $1.000 rompe la ganancia garantizada acá — cargala en la calculadora y ajustá el monto a mano.</div>';
+          } else {
+            realStakeHtml = '<div class="real-stake-block">' +
+              '<div class="type-tag" style="margin-bottom:4px;">Con tu saldo disponible ahora mismo (Casas → Disponible), esto es lo máximo que podés cubrir:</div>' +
+              realLegs.map(function(l){
+                return '<div>' + escapeHtml(l.bookmaker) + ': apostá <strong>' + fmtMoney(l.stake) + '</strong> a ' + escapeHtml(l.outcome) +
+                  ' <span class="cell-num">@' + l.odds.toFixed(2) + '</span></div>';
+              }).join('') +
+              '<div class="type-tag" style="margin-top:4px;">Total ' + fmtMoney(realActualTotal) + ', ganancia esperada al liquidarse ' + fmtMoney(realMinProfit) + '.</div>' +
+            '</div>';
+          }
+        }
+      }
       return '<div class="opp-card">' +
         '<div class="opp-header">' +
           '<div><strong>' + escapeHtml(opp.event || "Evento sin nombre") + '</strong>' +
@@ -1303,6 +1337,7 @@
         '<div class="opp-legs type-tag">' + legsList + '</div>' +
         pctCheckHtml +
         liveWarningHtml +
+        realStakeHtml +
         explanationHtml +
         '<button class="btn btn-sm btn-accent" data-load-opp="' + i + '">Cargar en la calculadora</button>' +
       '</div>';
@@ -1516,7 +1551,7 @@
   // that risks sitting there past the current cycle, so it's kept out of the automatic plan.
   var MAX_HOURS_UNTIL = 168;
 
-  function buildDailyPlan(goalAmount){
+  function buildAvailableCapitalMap(){
     var available = {};
     allBookmakers.forEach(function(b){
       var key = (b.name || "").trim().toLowerCase();
@@ -1529,6 +1564,33 @@
         name: b.name
       };
     });
+    return available;
+  }
+
+  // Given a market's legs + its implied-probability sum, figures out the biggest total stake
+  // that fits inside each involved bookmaker's real available capital (and stake limit), using
+  // the exact same weight-per-leg split the calculator uses. Read-only: does not touch `available`.
+  function fitStakeToCapital(legs, impliedSum, available){
+    var weights = [];
+    var maxStake = Infinity;
+    var problem = null;
+    legs.forEach(function(l){
+      var key = l.bookmaker.trim().toLowerCase();
+      var w = (1/effOdds(l)) / impliedSum;
+      weights.push({leg: l, weight: w});
+      var av = available[key];
+      if(!av){ problem = "La casa \"" + l.bookmaker + "\" no está registrada en Casas — agregala con su saldo para saber cuánto apostar acá."; return; }
+      if(av.status === "cerrada"){ problem = "\"" + l.bookmaker + "\" figura como Cerrada en Casas."; return; }
+      if(w > 0){
+        maxStake = Math.min(maxStake, av.remaining / w);
+        if(av.stakeLimit) maxStake = Math.min(maxStake, av.stakeLimit / w);
+      }
+    });
+    return {weights: weights, maxStake: maxStake, problem: problem};
+  }
+
+  function buildDailyPlan(goalAmount){
+    var available = buildAvailableCapitalMap();
 
     var candidates = lastOpportunities.map(function(opp){
       var impliedSum = opp.legs.reduce(function(s,l){ return s + 1/effOdds(l); }, 0);
@@ -1564,22 +1626,9 @@
           excluded.push({opp: c.opp, reason: "Empieza en más de 7 días — dejaría el capital parado más de un ciclo de Betburger, no se incluye en el plan automático."});
           return;
         }
-        var weights = [];
-        var maxStake = Infinity;
-        var problem = null;
-        c.opp.legs.forEach(function(l){
-          var key = l.bookmaker.trim().toLowerCase();
-          var w = (1/effOdds(l)) / c.impliedSum;
-          weights.push({leg: l, weight: w});
-          var av = available[key];
-          if(!av){ problem = "La casa \"" + l.bookmaker + "\" no está registrada en Casas — agregala con su saldo para poder incluir esta oportunidad."; return; }
-          if(av.status === "cerrada"){ problem = "\"" + l.bookmaker + "\" figura como Cerrada en Casas."; return; }
-          if(w > 0){
-            maxStake = Math.min(maxStake, av.remaining / w);
-            if(av.stakeLimit) maxStake = Math.min(maxStake, av.stakeLimit / w);
-          }
-        });
-        if(problem){ excluded.push({opp: c.opp, reason: problem}); return; }
+        var fit = fitStakeToCapital(c.opp.legs, c.impliedSum, available);
+        var weights = fit.weights, maxStake = fit.maxStake;
+        if(fit.problem){ excluded.push({opp: c.opp, reason: fit.problem}); return; }
         if(!isFinite(maxStake) || maxStake < 10000){
           excluded.push({opp: c.opp, reason: "No hay saldo disponible suficiente en alguna de las casas involucradas."});
           return;
